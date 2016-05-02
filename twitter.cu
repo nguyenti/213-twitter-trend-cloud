@@ -1,9 +1,9 @@
-
+#define TWEETSIZE 141
 //#include <curand.h>
 //#include <curand_kernel.h>
 
 #include "util.c"
-#define TREND_FETCH_TIME (5 * 60 * 1000)
+#define TREND_FETCH_TIME (5 * 60 * 1000) // should be 5 min
 char* read_tweet(FILE * stream);
 size_t read_trends(char ** trends, FILE * file);
 // Main function
@@ -14,7 +14,8 @@ int main(int argc, char** argv) {
   // The trends
   char ** trends = (char **)malloc(sizeof(char *) * NUMTRENDS);
   // The tweets
-  char ** tweets = (char **)malloc(sizeof(char *) * NUMTWEETS);
+  char tweets[NUMTWEETS][TWEETSIZE];
+  //char ** tweets = (char **)malloc(sizeof(char *) * NUMTWEETS);
   
   // The pipe for the tweet stream
   int fd_tweets[2];
@@ -55,7 +56,7 @@ int main(int argc, char** argv) {
   while(tweet != NULL) {
     
     // TODO: Get stream of tweets and trends using forks and pipes
-    if (1 || (time_ms() - start_time) > TREND_FETCH_TIME) {
+    if ((time_ms() - start_time) > TREND_FETCH_TIME) {
       start_time = time_ms();
 
       // open the pipe
@@ -86,18 +87,21 @@ int main(int argc, char** argv) {
           // TODO: cleanup
           exit(1);
         }
-        
+        // TESTING
         for (int i = 0; i < num_trends; i++) {
-          printf("trend %d: %s\n", i, trends[i]);
+          printf("TREND %d: %s\n", i, trends[i]);
         }
       }
     }
     
     // read trends from stdout
-    tweets[tweet_count] = tweet;
+    strncpy(tweets[tweet_count],tweet, TWEETSIZE);
+    free(tweet);
+
+    // TESTING
+    printf("tweet #%d: %s\n", tweet_count, tweet);
     
-    
-    if (tweet_count > NUMTWEETS) {
+    if (tweet_count == NUMTWEETS - 1) {
       
     
       // TODO: Clean data
@@ -112,8 +116,7 @@ int main(int argc, char** argv) {
       //   building, clustering, or term evolution over time
 
     
-      for (int i = 0; i < NUMTWEETS; i++)
-        free(tweets[i]);
+      tweet_count = 0;
     } // for each NUMTWEETS tweets
     
     // Read the next tweet  
@@ -125,9 +128,9 @@ int main(int argc, char** argv) {
   close(fd_tweets[0]);
 
   // Free stuff
-  for (int i = 0; i < NUMTWEETS; i++)
-    free(tweets[i]);
-  free(tweets);
+  //for (int i = 0; i < NUMTWEETS; i++)
+  //  free(tweets[i]);
+  //free(tweets);
   
   for (int i = 0; i < NUMTRENDS; i++)
     free(trends[i]);
@@ -210,7 +213,7 @@ size_t read_trends(char ** trends, FILE * file) {
     json_decref(first_object);
     json_decref(root);
 
-    free(line);
+    //free(line);
     
     // Return the number of trends read
     return i;
@@ -260,7 +263,7 @@ char* read_tweet(FILE * stream) {
     // Release this reference to the JSON object
     json_decref(root);
 
-    free(line);
+    //free(line);
     
     // Return the result
     return tweet_text;
