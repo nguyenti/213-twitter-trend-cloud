@@ -10,15 +10,16 @@
 //#include <curand_kernel.h>
 #include <errno.h>
 
-#include "util.h"
+#include "util.c"
 #define TREND_FETCH_TIME (5 * 60 * 1000)
 #define NUMTRENDS 50 // Never should be more than 50, per the API
+#define NUMTWEETS 1000
 
 // Read trends from stdin
-size_t read_trends(char ** trends);
+size_t read_trends(char ** trends, FILE * trend_pipe_out);
 
 // Read the tweet in from stdin
-char* read_tweet();
+char* read_tweet(FILE * tweet_pipe_out);
 
 
 // Main function
@@ -29,6 +30,9 @@ int main(int argc, char** argv) {
   size_t start_time = time_ms() - TREND_FETCH_TIME - 1;
   // The trends
   char ** trends = (char **)malloc(sizeof(char *) * NUMTRENDS);
+
+  // The pipe for the tweet stream
+  int fd_tweets[2];
   
   if(tweet != NULL) {
     //printf("Tweet: %s\n", tweet);
@@ -76,12 +80,10 @@ int main(int argc, char** argv) {
         perror("execvp failed");
       } else { // parent
         close(fd[1]);
-        close(STDIN_FILENO); //?????
-        dup2(fd[0], STDIN_FILENO);
-        //wait(NULL);
-        // printf("Child died\n");
         // read trends from stdout
-        size_t num_found = read_trends(trends);
+        FILE * stream = fdopen (fd[0], "r");
+        size_t num_found = read_trends(trends, stream);
+        fclose(stream);
         if (num_found < 1) {
           printf("Could not fetch trends\n");
           // TODO: cleanup
@@ -93,7 +95,66 @@ int main(int argc, char** argv) {
         }
       }
     }
+    
+    // if (first_iteration) {
+    // // Get tweets
+    //   // provide file descriptor pointer array for pipe 
+    //   /* within pipe:
+    //      fd[0] will be input end
+    //      fd[1] will be output end */
 
+    //   printf("Pipe Open\n");
+    //   // open the pipe
+    //   if (pipe (fd_tweets) < 0){
+    //     perror("pipe error");
+    //     exit(1);
+    //   }
+
+    //   rc = fork();
+    //   if (rc < 0) { // error
+    //     perror("Fork failed!");
+    //     exit(1);
+    //   } else if (rc == 0) { // child
+    //     // close input, leave output open
+    //     close (fd_tweets[0]);
+    //     // set stdout to pipe
+    //     if (fd_tweets[1] !=  STDOUT_FILENO) {
+    //       if (dup2(fd_tweets[1], STDOUT_FILENO) != STDOUT_FILENO){
+    //         perror("dup2 error for standard output");
+    //         exit(1);
+    //       }
+    //       close(fd_tweets[1]); /* not needed after dup2 */
+    //     }
+    //     // now stdout goes to the pipe
+
+    //     // TODO: exec curl
+
+    //     // TESTING: exec cat
+    //     char* args[] = {"cat", "trends.json", NULL};
+    //     execvp(args[0], args);
+    //     perror("execvp failed");
+    //   }// if first iteration, fork a child to read the tweet stream forever
+
+    //    // parent
+    //     close(fd_tweets[1]);
+    //     close(STDIN_FILENO); //?????
+    //     dup2(fd_tweets[0], STDIN_FILENO);
+    //     // read trends from stdout
+    //     size_t num_found = read_trends(trends);
+    //     if (num_found < 1) {
+    //       printf("Could not fetch trends\n");
+    //       // TODO: cleanup
+    //       exit(1);
+    //     }
+    //     int i;
+    //     for (i = 0; i < num_found; i++) {
+    //       printf("trend %d: %s\n", i, trends[i]);
+    //     }
+    //   }
+    // In child:
+    //   curl never exits
+    // In parent:
+    //   don't close the pipe, keep reading
     
     
     // TODO: Clean data
@@ -121,7 +182,7 @@ int main(int argc, char** argv) {
 // Returns the size of the trends array
 // Make sure to allocate the trends array!
 // char ** trends = (char **)malloc(sizeof(char *) * NUMTRENDS);
-size_t read_trends(char ** trends) {
+size_t read_trends(char ** trends, FILE * file) {
 
   // for using getline
   static char* line = NULL;
@@ -129,7 +190,7 @@ size_t read_trends(char ** trends) {
   ssize_t line_length;
   
   // Loop until we read one valid json array or reach the end of the input
-  while((line_length = getline(&line, &line_maxlen, stdin)) > 0) {
+  while((line_length = getline(&line, &line_maxlen, file)) > 0) {
     // Parse the JSON body
     json_error_t error;
     // The outer array, hypothetically
