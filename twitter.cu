@@ -5,12 +5,17 @@
 #include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
-#include <curand.h>
-#include <curand_kernel.h>
+#include <unistd.h>
+//#include <curand.h>
+//#include <curand_kernel.h>
 #include <errno.h>
 
 #include "util.h"
 #define TREND_FETCH_TIME (5 * 60 * 1000)
+#define NUMTRENDS 50 // Never should be more than 50, per the API
+
+// Read trends from stdin
+size_t read_trends(char ** trends);
 
 // Read the tweet in from stdin
 char* read_tweet();
@@ -18,22 +23,28 @@ char* read_tweet();
 
 // Main function
 int main(int argc, char** argv) {
-  char* tweet = read_tweet();
-
-  // Timer for trend fetching. Should be every 5 minutes
-  size_t start_time = time_ms() - TREND_FETCH_TIME;
+  char* tweet = "hi";//read_tweet();
   
-  while(tweet != NULL) {
-    printf("%s\n", tweet);
+  // Timer for trend fetching. Should be every 5 minutes
+  size_t start_time = time_ms() - TREND_FETCH_TIME - 1;
+  // The trends
+  char ** trends = (char **)malloc(sizeof(char *) * NUMTRENDS);
+  
+  if(tweet != NULL) {
+    //printf("Tweet: %s\n", tweet);
+    printf("Start_time: %zu\n", start_time);
+    size_t cur_time = time_ms();
     
+    printf("Cur time: %zu, diff time: %zu\n", cur_time, cur_time-start_time);
     // TODO: Get stream of tweets and trends using forks and pipes
-    if ((time_ms() - start_time) > TREND_FETCH_TIME) {
+    if (1 || (time_ms() - start_time) > TREND_FETCH_TIME) {
       start_time = time_ms();
       int fd[2];    // provide file descriptor pointer array for pipe 
       /* within pipe:
          fd[0] will be input end
          fd[1] will be output end */
 
+      printf("Pipe Open\n");
       // open the pipe
       if (pipe (fd) < 0){
         perror("pipe error");
@@ -60,14 +71,29 @@ int main(int argc, char** argv) {
         // TODO: exec curl
 
         // TESTING: exec cat
-        execvp("cat", {"cat", "trends.json"});
+        char* args[] = {"cat", "trends.json", NULL};
+        execvp(args[0], args);
         perror("execvp failed");
       } else { // parent
+        close(fd[1]);
+        close(STDIN_FILENO); //?????
+        dup2(fd[0], STDIN_FILENO);
+        //wait(NULL);
+        // printf("Child died\n");
         // read trends from stdout
-
-        
+        size_t num_found = read_trends(trends);
+        if (num_found < 1) {
+          printf("Could not fetch trends\n");
+          // TODO: cleanup
+          exit(1);
+        }
+        int i;
+        for (i = 0; i < num_found; i++) {
+          printf("trend %d: %s\n", i, trends[i]);
+        }
       }
     }
+
     
     
     // TODO: Clean data
@@ -82,10 +108,10 @@ int main(int argc, char** argv) {
     //   building, clustering, or term evolution over time
     
     // Free the tweet string
-    free(tweet);
+    // free(tweet);
     
     // Read the next tweet
-    tweet = read_tweet();
+    //tweet = read_tweet();
   }
   
   return 0;
@@ -106,6 +132,7 @@ size_t read_trends(char ** trends) {
   while((line_length = getline(&line, &line_maxlen, stdin)) > 0) {
     // Parse the JSON body
     json_error_t error;
+    // The outer array, hypothetically
     json_t* root = json_loads(line, 0, &error);
   
     // Skip over lines with errors
@@ -127,6 +154,8 @@ size_t read_trends(char ** trends) {
      // Make sure 'trends' is a nonempty array
     if(!json_is_array(json_trends_array) ||
        (arr_size = json_array_size(json_trends_array)) < 1) {
+      json_decref(json_trends_array);
+      json_decref(first_object);
       json_decref(root);
       continue;
     }
@@ -148,21 +177,26 @@ size_t read_trends(char ** trends) {
       // Get the string out of the JSON text value
       const char* json_text = json_string_value(text);
   
-      // Got a tweet! Copy just the tweet text to an allocated buffer
-      trends[i] = (char*)malloc(sizeof(char) * (line_length + 1));//TODO: ???
+      // Got a trend! Copy just the trend text to an allocated buffer
+      trends[i] = (char*)malloc(sizeof(char) * (strlen(json_text) + 1));
       strcpy(trends[i], json_text);
     
       // Release this reference to the JSON object
+      json_decref(text);
       json_decref(json_trend_obj);
-
     }
+
+    // Release references to JSON objects
+    json_decref(json_trends_array);
+    json_decref(first_object);
+    json_decref(root);
     
     // Return the number of trends read
     return i;
   }
   
-  // Ran out of input. Just return NULL
-  return NULL;
+  // Ran out of input. Just return 0
+  return 0;
 } // read_trends
 
 
