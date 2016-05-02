@@ -98,13 +98,14 @@ int main(int argc, char** argv) {
     strncpy(tweets[tweet_count],tweet, TWEETSIZE);
     free(tweet);
 
+    // TODO: Clean and compress the tweet
+    
     // TESTING
     printf("tweet #%d: %s\n", tweet_count, tweet);
     
     if (tweet_count == NUMTWEETS - 1) {
-      
     
-      // TODO: Clean data
+     
       // TODO: Make an NxN intersection matrix
       // TODO: Make an NxK topic containment bit matrix
       // TODO: Find word sets correlated with each topic and compute correlation
