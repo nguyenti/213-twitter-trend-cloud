@@ -6,13 +6,9 @@ all: twitter
 clean:
 	@rm -f twitter
 
-twitter: twitter.c util.o
-	$(GCC) $(NVCC_FLAGS) -o twitter twitter.c util.o
-
-util.o: util.c util.h
-	gcc -c util.c
-
+twitter: twitter.cu util.c
+	$(NVCC) $(NVCC_FLAGS) -o twitter twitter.cu util.c
 
 run: twitter
-	LD_LIBRARY_PATH=/home/curtsinger/lib cat /home/curtsinger/data/tweets.json | ./twitter
+	LD_LIBRARY_PATH=/home/curtsinger/lib ./twitter
 
