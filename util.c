@@ -11,6 +11,8 @@
 
 #define NUMTRENDS 50 // Never should be more than 50, per the API
 #define NUMTWEETS 1000
+#define COMPRESSEDLEN 32
+#define TWEETSIZE 141
 
 /**
  * Pipe a stream from a child process
@@ -44,5 +46,54 @@ size_t time_ms() {
   
   // Convert timeval values to milliseconds
   return tv.tv_sec*1000 + tv.tv_usec/1000;
+}
+
+//Citation: https://en.wikipedia.org/wiki/Jenkins_hash_function
+uint32_t hash_func (char *key)
+{
+  int len = strlen(key);
+  uint32_t hash, i;
+  for(hash = i = 0; i < len; ++i)
+    {
+      hash += key[i];
+      hash += (hash << 10);
+      hash ^= (hash >> 6);
+    }
+  hash += (hash << 3);
+  hash ^= (hash >> 11);
+  hash += (hash << 15);
+  // avoid returning zeros
+  return hash == 0 ? 1 : hash;
+}
+
+// Takes out the punctuation from tweets
+void clean_string(char* string) {
+  char ch;
+  int i = 0;
+  while((ch = string[i]) != '\0') {
+    if (ispunct(ch)) {
+      // replace punctuation with whitespace
+      string[i] = ' ';
+    }
+    tolower(string[i]); // downcases the characters 
+    i++;
+  }
+}
+
+/* compress a string into an array of hashed numbers.
+ * @para: string is already cleaned and comppressed is a pointer to 
+ *        an array of 32 int  
+ */
+void compress_str (char* string, int* compressed) {
+  int index = 0;
+  char* word[TWEETSIZE];
+  while ((word[index] = strtok(string, " \0\n\t")) != NULL &&
+         index < COMPRESSEDLEN){
+    string = NULL;
+    if (strlen(word[index]) >= 3) // if the word is appropriate size
+      compressed[index] =
+        hash_func(word[index]);
+    index++;
+  }
 }
 

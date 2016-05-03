@@ -1,5 +1,5 @@
 NVCC := nvcc -arch sm_20
-NVCC_FLAGS := -g -I/home/curtsinger/include -L/home/curtsinger/lib -ljansson
+NVCC_FLAGS := -g -I/home/curtsinger/include -L/home/curtsinger/lib -ljansson -Xcompiler "-std=c11"
 GCC := gcc
 all: twitter
 

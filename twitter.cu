@@ -1,4 +1,3 @@
-#define TWEETSIZE 141
 //#include <curand.h>
 //#include <curand_kernel.h>
 
@@ -15,7 +14,9 @@ int main(int argc, char** argv) {
   char ** trends = (char **)malloc(sizeof(char *) * NUMTRENDS);
   // The tweets
   char tweets[NUMTWEETS][TWEETSIZE];
-  //char ** tweets = (char **)malloc(sizeof(char *) * NUMTWEETS);
+
+  // Array of compressed tweets
+  int compressed_tweets[NUMTWEETS][COMPRESSEDLEN];
   
   // The pipe for the tweet stream
   int fd_tweets[2];
@@ -52,6 +53,7 @@ int main(int argc, char** argv) {
 
   // Get the first tweet
   char* tweet = read_tweet(tweet_stream);
+  
   // stop when out of tweets or trends or the user quits???
   while(tweet != NULL) {
     
@@ -94,18 +96,18 @@ int main(int argc, char** argv) {
       }
     }
     
-    // read trends from stdout
-    strncpy(tweets[tweet_count],tweet, TWEETSIZE);
-    free(tweet);
+    // save tweet by copying
+    strncpy(tweets[tweet_count], tweet, TWEETSIZE);
 
     // TODO: Clean and compress the tweet
+    clean_string(tweet);
+    compress_str(tweet, compressed_tweets[tweet_count]);
+    free(tweet);
     
     // TESTING
     printf("tweet #%d: %s\n", tweet_count, tweet);
     
     if (tweet_count == NUMTWEETS - 1) {
-    
-     
       // TODO: Make an NxN intersection matrix
       // TODO: Make an NxK topic containment bit matrix
       // TODO: Find word sets correlated with each topic and compute correlation
@@ -149,10 +151,9 @@ size_t read_trends(char ** trends, FILE * file) {
   // for using getline
   static char* line = NULL;
   static size_t line_maxlen = 0;
-  ssize_t line_length;
   
   // Loop until we read one valid json array or reach the end of the input
-  while((line_length = getline(&line, &line_maxlen, file)) > 0) {
+  while(getline(&line, &line_maxlen, file) > 0) {
     // Parse the JSON body
     json_error_t error;
     // The outer array, hypothetically

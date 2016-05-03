@@ -1,7 +1,7 @@
 # 213-twitter-trend-cloud
 
 ## TODO
-   1. TODO: Clean data  
+   1. TODO: Clean data: remove URLs and stopwords
    2.   TODO: Make an NxN intersection matrix  
    3.   TODO: Make an NxK topic containment bit matrix  
    4.   TODO: Find word sets correlated with each topic and compute correlation
