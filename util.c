@@ -97,3 +97,11 @@ void compress_str (char* string, int* compressed) {
   }
 }
 
+ 
+__device__ void intersection(uint32_t *tweet1,uint32_t *tweet2, int *intersect){
+  intersect = (int*) mallloc(sizeof(int) * (COMPRESSEDLEN + 1));
+  
+
+  // TODO: Intersection
+}
+
