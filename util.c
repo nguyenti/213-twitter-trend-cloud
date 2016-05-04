@@ -1,3 +1,8 @@
+#ifndef __UTIL_C__
+#define __UTIL_C__
+
+
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,7 +16,7 @@
 
 #define NUMTRENDS 50 // Never should be more than 50, per the API
 #define NUMTWEETS 1000
-#define COMPRESSEDLEN 32
+#define COMPRESSEDLEN 36
 #define TWEETSIZE 141
 
 /**
@@ -81,7 +86,7 @@ void clean_string(char* string) {
 }
 
 /* compress a string into an array of hashed numbers.
- * @para: string is already cleaned and comppressed is a pointer to 
+ * @para: string is already cleaned and compressed is a pointer to 
  *        an array of 32 int  
  */
 void compress_str (char* string, int* compressed) {
@@ -91,17 +96,12 @@ void compress_str (char* string, int* compressed) {
          index < COMPRESSEDLEN){
     string = NULL;
     if (strlen(word[index]) >= 3) // if the word is appropriate size
-      compressed[index] =
-        hash_func(word[index]);
+      compressed[index] = hash_func(word[index]);
     index++;
   }
+  compressed[index] = 0;
 }
 
- 
-__device__ void intersection(uint32_t *tweet1,uint32_t *tweet2, int *intersect){
-  intersect = (int*) mallloc(sizeof(int) * (COMPRESSEDLEN + 1));
-  
 
-  // TODO: Intersection
-}
 
+#endif

@@ -2,9 +2,19 @@
 //#include <curand_kernel.h>
 
 #include "util.c"
+
+
 #define TREND_FETCH_TIME (5 * 60 * 1000) // should be 5 min
 char* read_tweet(FILE * stream);
 size_t read_trends(char ** trends, FILE * file);
+
+
+__global__ void compute_topic_containment(int * gpu_tweets,
+                                          int * gpu_trends,
+                                          char * gpu_matrix);
+
+
+
 // Main function
 int main(int argc, char** argv) {
   // Timer for trend fetching. Should be every 5 minutes
@@ -15,8 +25,30 @@ int main(int argc, char** argv) {
   // The tweets
   char tweets[NUMTWEETS][TWEETSIZE];
 
-  // Array of compressed tweets
+  // Array of compressed tweets and trends on host and device
   int compressed_tweets[NUMTWEETS][COMPRESSEDLEN];
+  int compressed_trends[NUMTRENDS];
+  int * gpu_tweets;
+  if(cudaMalloc(&gpu_tweets, sizeof(int) * NUMTWEETS * COMPRESSEDLEN)
+     != cudaSuccess) {
+    fprintf(stderr, "Failed to allocate the tweets on GPU\n");
+    exit(2);
+  }
+  int * gpu_trends;
+  if(cudaMalloc(&gpu_tweets, sizeof(int) * NUMTRENDS) != cudaSuccess) {
+    fprintf(stderr, "Failed to allocate the trends on GPU\n");
+    exit(2);
+  }
+  
+  // Topic containment matrix
+  char * trend_matrix = (char *)malloc(sizeof(char) * NUMTWEETS * NUMTRENDS);
+  char * gpu_matrix;
+  if(cudaMalloc(&gpu_tweets, sizeof(int) * NUMTWEETS * NUMTRENDS)
+     != cudaSuccess) {
+    fprintf(stderr, "Failed to allocate the matrix on GPU\n");
+    exit(2);
+  }
+
   
   // The pipe for the tweet stream
   int fd_tweets[2];
@@ -91,7 +123,13 @@ int main(int argc, char** argv) {
         }
         // TESTING
         for (int i = 0; i < num_trends; i++) {
+          compressed_trends[i] = hash_func(trends[i]);
           printf("TREND %d: %s\n", i, trends[i]);
+        }
+        // Copy trends onto the GPU
+        if(cudaMemcpy(gpu_trends, compressed_trends, sizeof(int) * NUMTRENDS,
+                      cudaMemcpyHostToDevice) != cudaSuccess) {
+          fprintf(stderr, "Failed to copy trends to the GPU\n");
         }
       }
     }
@@ -107,9 +145,21 @@ int main(int argc, char** argv) {
     // TESTING
     printf("tweet #%d: %s\n", tweet_count, tweet);
     
-    if (tweet_count == NUMTWEETS - 1) {
-      // TODO: Make an NxN intersection matrix
+    if (tweet_count >= NUMTWEETS - 1) {
+      // Copy compressed tweets onto the GPU
+      if(cudaMemcpy(gpu_tweets, compressed_tweets,
+                    sizeof(int) * NUMTWEETS * COMPRESSEDLEN,
+                    cudaMemcpyHostToDevice) != cudaSuccess) {
+        fprintf(stderr, "Failed to copy tweets to the GPU\n");
+      }
+
       // TODO: Make an NxK topic containment bit matrix
+      compute_topic_containment<<<1,NUMTWEETS>>>(gpu_tweets,
+                                                 gpu_trends,
+                                                 gpu_matrix);
+
+      
+      
       // TODO: Find word sets correlated with each topic and compute correlation
       //   coefficients
       // TODO: Create word clouds with external tools (go to 8 if it doesn’t
@@ -142,6 +192,7 @@ int main(int argc, char** argv) {
   return 0;
 }
 
+/* Get inputs from the feed */
 
 // Returns the size of the trends array
 // Make sure to allocate the trends array!
@@ -273,4 +324,43 @@ char* read_tweet(FILE * stream) {
   
   // Ran out of input. Just return NULL
   return NULL;
+}
+
+
+
+/* CUDA functions */
+
+__device__ void get_intersect(int *tweet1,int *tweet2, int *intersect){
+  intersect = (int*) malloc(sizeof(int) * (COMPRESSEDLEN));
+  int i = 0; // tweet1
+  int j = 0; // tweet2
+  int index_intersect;
+  int k = 0; // For the intersection
+  while (tweet1[i] != 0) { 
+    while (tweet2[j] != 0) {
+      if (tweet2[j] == tweet1[i]) {
+        index_intersect = 0;
+        while (index_intersect < k) {
+          // check that we have no repeats in our intersection
+          if (tweet1[i] == intersect[index_intersect]) {
+            break;
+          }
+        }
+        // if it didn't find the tweet in the intersection, add it
+        if (index_intersect == k) {
+          intersect[k++] = tweet1[i];
+        }
+      }
+      j++;
+    }
+    i++;
+    j = 0;
+  }
+}
+
+
+__global__ void compute_topic_containment(int * gpu_tweets,
+                                          int * gpu_trends,
+                                          char * gpu_matrix) {
+  
 }
