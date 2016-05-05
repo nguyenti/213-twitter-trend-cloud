@@ -2,9 +2,14 @@
 //#include <curand_kernel.h>
 
 #include "util.c"
+#include <unordered_map>
 
 
 #define TREND_FETCH_TIME (5 * 60 * 1000) // should be 5 min
+#define THREADS_PER_BLOCK 64
+
+using namespace std;
+
 char* read_tweet(FILE * stream);
 size_t read_trends(char ** trends, FILE * file);
 
@@ -14,7 +19,10 @@ __global__ void compute_topic_containment(int * gpu_tweets,
                                           char * gpu_matrix);
 
 
-
+__global__ void get_trend_word_counts(int * trend_maps,
+                                       int * gpu_tweets,
+                                       int word_count,
+                                       char * gpu_matrix);
 // Main function
 int main(int argc, char** argv) {
   // Timer for trend fetching. Should be every 5 minutes
@@ -41,14 +49,21 @@ int main(int argc, char** argv) {
   }
   
   // Topic containment matrix
-  char * trend_matrix = (char *)malloc(sizeof(char) * NUMTWEETS * NUMTRENDS);
+  char * trend_matrix = (char *)calloc(sizeof(char) * NUMTWEETS * NUMTRENDS);
   char * gpu_matrix;
   if(cudaMalloc(&gpu_tweets, sizeof(int) * NUMTWEETS * NUMTRENDS)
      != cudaSuccess) {
     fprintf(stderr, "Failed to allocate the matrix on GPU\n");
     exit(2);
   }
+  // word count maps for every trend
+  int * trend_maps; //TODO zero out on every iteration
 
+  // Word arrays
+  char words[NUMTWEETS*COMPRESSEDLEN][TWEETSIZE];
+  int hashed_words[NUMTWEETS*COMPRESSEDLEN][TWEETSIZE];
+  int total_word_counts[NUMTWEETS*COMPRESSEDLEN][TWEETSIZE];
+  int word_count = 0;
   
   // The pipe for the tweet stream
   int fd_tweets[2];
@@ -139,12 +154,13 @@ int main(int argc, char** argv) {
 
     // TODO: Clean and compress the tweet
     clean_string(tweet);
-    compress_str(tweet, compressed_tweets[tweet_count]);
+    compress_str(tweet, compressed_tweets[tweet_count],
+                 words, hashed_words, total_word_counts, &word_count);
     free(tweet);
     
     // TESTING
     printf("tweet #%d: %s\n", tweet_count, tweet);
-    
+
     if (tweet_count >= NUMTWEETS - 1) {
       // Copy compressed tweets onto the GPU
       if(cudaMemcpy(gpu_tweets, compressed_tweets,
@@ -153,13 +169,20 @@ int main(int argc, char** argv) {
         fprintf(stderr, "Failed to copy tweets to the GPU\n");
       }
 
+      // Allocate trend maps
+      if(cudaMalloc(&trend_maps, sizeof(int) * word_count * NUMTRENDS)
+         != cudaSuccess) {
+        fprintf(stderr, "Failed to allocate the matrix on GPU\n");
+        exit(2);
+      }
+ 
       // TODO: Make an NxK topic containment bit matrix
-      compute_topic_containment<<<1,NUMTWEETS>>>(gpu_tweets,
-                                                 gpu_trends,
-                                                 gpu_matrix);
+      compute_topic_containment<<<(N*N + THREADS_PER_BLOCK -1)/THREADS_PER_BLOCK,
+        THREADS_PER_BLOCK>>>(gpu_tweets, gpu_trends, gpu_matrix);
 
-      
-      
+      // TODO: Get word counts for each tweet with a specific trend
+      get_trend_word_counts<<<1, NUMTRENDS>>>(trend_maps, gpu_tweets, word_count,
+                                              gpu_matrix);
       // TODO: Find word sets correlated with each topic and compute correlation
       //   coefficients
       // TODO: Create word clouds with external tools (go to 8 if it doesn’t
@@ -167,8 +190,13 @@ int main(int argc, char** argv) {
       // TODO: If time allows: Implement weighing words by importance (tf-idf)
       // TODO: If time allows: Explore other uses of the same output data: graph
       //   building, clustering, or term evolution over time
+      // TODO: If time allows: Rewrite compress_str to use insertion sort and binary search
+      //   maybe with an auxiliary data structure
 
-    
+      // Free stuff: trend_maps
+      // Zero out gpu_matrix
+      
+      word_count = 0;
       tweet_count = 0;
     } // for each NUMTWEETS tweets
     
@@ -180,7 +208,8 @@ int main(int argc, char** argv) {
   fclose(tweet_stream);
   close(fd_tweets[0]);
 
-  // Free stuff
+  // Free CUDA stuff
+  
   //for (int i = 0; i < NUMTWEETS; i++)
   //  free(tweets[i]);
   //free(tweets);
@@ -358,9 +387,35 @@ __device__ void get_intersect(int *tweet1,int *tweet2, int *intersect){
   }
 }
 
-
+// N tweets x K trends
+// gpu_matrix must be zeroed out
 __global__ void compute_topic_containment(int * gpu_tweets,
                                           int * gpu_trends,
                                           char * gpu_matrix) {
-  
+  int index =  threadIdx.x + blockIdx.x * THREADS_PER_BLOCK;
+  if (index < NUMTWEETS) {
+    int * tweet = gpu_tweets[COMPRESSEDLEN * index];
+    for (int i = 0; i < COMPRESSEDLEN && tweet[i] != 0; i++) {
+      for (int j = 0; j < NUMTRENDS; j++) {
+        gpu_matrix[NUMTRENDS * index + j] = tweet[i] == gpu_trends[j] ? 1 : 0;   
+      }
+    }
+  }
+}
+
+__global__ void get_trend_word_counts(int * trend_maps,
+                                       int * gpu_tweets,
+                                       int word_count,
+                                      char * gpu_matrix) {
+
+  int trend_index =  threadIdx.x + blockIdx.x * THREADS_PER_BLOCK;
+   if (trend_index < NUMTRENDS) {
+     for (int i = 0; i < NUMTWEETS; i++) { // for every tweet
+       if (gpu_matrix[NUMTWEETS * trend_index + i] == 1) {
+         for (int j = 0; j < COMPRESSEDLEN; j++) { // for every word
+           trend_maps[trend_index * word_count + (gpu_tweets[j] % word_count)]++;
+         }
+       }
+     }
+   }
 }

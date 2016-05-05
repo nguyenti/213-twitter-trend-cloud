@@ -76,7 +76,7 @@ void clean_string(char* string) {
   char ch;
   int i = 0;
   while((ch = string[i]) != '\0') {
-    if (ispunct(ch)) {
+    if (ispunct(ch) && ch != '#') {
       // replace punctuation with whitespace
       string[i] = ' ';
     }
@@ -86,17 +86,36 @@ void clean_string(char* string) {
 }
 
 /* compress a string into an array of hashed numbers.
+ * Add each word to our word_count counter
  * @para: string is already cleaned and compressed is a pointer to 
  *        an array of 32 int  
  */
-void compress_str (char* string, int* compressed) {
+void compress_str (char* string, int* compressed, char words[][TWEETSIZE],
+                   int * hash, int * total_word_counts, int * word_count) {
   int index = 0;
   char* word[TWEETSIZE];
   while ((word[index] = strtok(string, " \0\n\t")) != NULL &&
          index < COMPRESSEDLEN){
     string = NULL;
-    if (strlen(word[index]) >= 3) // if the word is appropriate size
+    if (strlen(word[index]) >= 3) { // if the word is appropriate size
       compressed[index] = hash_func(word[index]);
+      // Check if the word is already in our map
+      int i;
+      for (i = 0; i < *word_count; i++) {
+        if (compressed[index] == hash[i]) {
+          // it is! So we increment the count
+          total_word_counts[i]++;
+          break;
+        }
+      }
+      // If it wasn't found, add it to our map
+      if (i == *word_count) {
+        strncpy(words[*word_count], word[index], TWEETSIZE);
+        hash[*word_count] = compressed[index];
+        total_word_counts[*word_count]++;
+        (*word_count)++;
+      }
+    }
     index++;
   }
   compressed[index] = 0;
