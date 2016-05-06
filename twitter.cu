@@ -15,23 +15,38 @@ size_t read_trends(char ** trends, FILE * file);
 
 /* 
  * gpu_tweets - the compressed representation of tweets
- * gpu trends - the compressed representation of trends
+ * gpu_hashed_words - the compressed representation of words
  * gpu_matrix - the result bit containment matrix 
+ * word_count - the number of distinct words in the batch
  */
-__global__ void compute_topic_containment(int * gpu_tweets, 
-                                          int * gpu_trends,
-                                          char * gpu_matrix);
+__global__ void compute_word_containment(int * gpu_tweets, 
+                                         int * gpu_hashed_words,
+                                         char * gpu_matrix,
+                                         int word_count);
 
 /* 
  * trend_maps - a K trends x word_count array, denoting word counts
- * gpu_tweets - the compressed representation of tweets
+ * gpu_tweets_in_trends - array of number of tweets in each trend
+ * gpu_trends - the compressed representation of trends
  * word_count - the number of distinct words in the batch
  * gpu_matrix - the  bit containment matrix 
  */
 __global__ void get_trend_word_counts(int * trend_maps,
-                                       int * gpu_tweets,
-                                       int word_count,
-                                       char * gpu_matrix);
+                                      int * gpu_tweets_in_trends,
+                                      int * gpu_trends,
+                                      int word_count,
+                                      char * gpu_matrix);
+
+/*
+ * trend_maps - word counts for each trend
+ * gpu_tweets_in_trends - number of tweets in a trend
+ * total_word_counts - word counts for all words in all tweets
+ * correlated_words - output, what's correlated
+ */
+__global__ void get_correlated_words(int * trend_maps,
+                                     int * gpu_tweets_in_trends,
+                                     int * total_word_counts,
+                                     char * correlated_words);
 // Main function
 int main(int argc, char** argv) {
   // Timer for trend fetching. Should be every 5 minutes
@@ -192,7 +207,7 @@ int main(int argc, char** argv) {
       // Figure out trends' compressed values (indices in the word array)
       for (int i = 0; i < num_trends; i++) {
         // go through words array to find each trend'd index
-        for (int j = 0; j < num_words; j++) {
+        for (int j = 0; j < word_count; j++) {
           if (strcmp(trends[i], words[j]) == 0) {
             compressed_trends[i] = j;
             break;
@@ -200,21 +215,36 @@ int main(int argc, char** argv) {
         }
       }
 
-      // TODO copy trends onto the GPU
+      // TODO copy compressed_trends onto the GPU
+      // TODO: copy word_count onto GPU
+      // TODO: copy hashed_words onto GPU
+      // TODO: copy words onto GPU
+      // char words[NUMTWEETS*COMPRESSEDLEN][TWEETSIZE];
+      // TODO: create gpu_tweets_in_trends on GPU & zero out
+
+      // Zero out gpu_tweets
       
       // Make tweets x words matrix of counts. (similar to the thing below)  
       // TODO: Make an NxK topic containment bit matrix
-      compute_word_containment<<<1, NUMTWEETS>>>(gpu_tweets, gpu_trends, gpu_matrix);
+      compute_word_containment<<<1, NUMTWEETS>>>(gpu_tweets, gpu_hashed_words,
+                                                 gpu_matrix, word_count);
 
+      // TODO: That syncing thing
+      
       // To make trend_maps, add rows of the tweet X word matrix that correpond
       // to each trend
       // TODO: Get word counts for each tweet with a specific trend
-      get_trend_word_counts<<<1, NUMTRENDS>>>(trend_maps, gpu_tweets, word_count,
+      get_trend_word_counts<<<1, NUMTRENDS>>>(trend_maps,
+                                              gpu_tweets_in_trends,
+                                              gpu_trends,
+                                              word_count,
                                               gpu_matrix);
       
       // TODO: Find word sets correlated with each topic and compute correlation
       //   coefficients
-      get_correlated_words<<<1, NUMTRENDS>>>(trend_maps, total_word_counts,
+      get_correlated_words<<<1, NUMTRENDS>>>(trend_maps,
+                                             gpu_tweets_in_trends,
+                                             total_word_counts,
                                              correlated_words);
 
       
@@ -423,33 +453,48 @@ __device__ void get_intersect(int *tweet1,int *tweet2, int *intersect){
 
 // N tweets x K trends
 // gpu_matrix must be zeroed out
-__global__ void compute_topic_containment(int * gpu_tweets,
-                                          int * gpu_trends,
-                                          char * gpu_matrix) {
+__global__ void compute_word_containment(int * gpu_tweets,
+                                         int * gpu_hashed_words,
+                                         char * gpu_matrix,
+                                         int word_count) {
   int index =  threadIdx.x + blockIdx.x * THREADS_PER_BLOCK;
   if (index < NUMTWEETS) {
     int * tweet = gpu_tweets[COMPRESSEDLEN * index];
     for (int i = 0; i < COMPRESSEDLEN && tweet[i] != 0; i++) {
-      for (int j = 0; j < NUMTRENDS; j++) {
-        gpu_matrix[NUMTRENDS * index + j] = tweet[i] == gpu_trends[j] ? 1 : 0;   
+      for (int j = 0; j < word_count; j++) {
+        if (tweet[i] == gpu_hashed_words[j])
+          gpu_matrix[word_count * index + j]++;
       }
     }
   }
 }
 
 __global__ void get_trend_word_counts(int * trend_maps,
-                                       int * gpu_tweets,
-                                       int word_count,
+                                      int * gpu_tweets_in_trends,
+                                      int * gpu_trends,
+                                      int word_count,
                                       char * gpu_matrix) {
-
   int trend_index =  threadIdx.x + blockIdx.x * THREADS_PER_BLOCK;
    if (trend_index < NUMTRENDS) {
+     int trend_map_index = trend_index * word_count;
+     int trend_word_index = gpu_trends[trend_index];
      for (int i = 0; i < NUMTWEETS; i++) { // for every tweet
-       if (gpu_matrix[NUMTWEETS * trend_index + i] == 1) {
-         for (int j = 0; j < COMPRESSEDLEN; j++) { // for every word
-           trend_maps[trend_index * word_count + (gpu_tweets[j] % word_count)]++;
+       if (gpu_matrix[i * word_count + trend_word_index] > 0) {
+         // if the trend is present in the tweet
+         for (int j = 0; j < word_count; j++) {
+           // get the word counts for all the words in the tweet
+           trend_maps[trend_map_index + j] +=
+             gpu_matrix[i * word_count + j];
          }
+         gpu_tweets_in_trend[trend_index]++;
        }
      }
    }
+}
+
+__global__ void get_correlated_words(int * trend_maps,
+                                     int * gpu_tweets_in_trends,
+                                     int * total_word_counts,
+                                     char * correlated_words) {
+
 }
