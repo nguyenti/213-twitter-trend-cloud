@@ -13,12 +13,21 @@ using namespace std;
 char* read_tweet(FILE * stream);
 size_t read_trends(char ** trends, FILE * file);
 
-
-__global__ void compute_topic_containment(int * gpu_tweets,
+/* 
+ * gpu_tweets - the compressed representation of tweets
+ * gpu trends - the compressed representation of trends
+ * gpu_matrix - the result bit containment matrix 
+ */
+__global__ void compute_topic_containment(int * gpu_tweets, 
                                           int * gpu_trends,
                                           char * gpu_matrix);
 
-
+/* 
+ * trend_maps - a K trends x word_count array, denoting word counts
+ * gpu_tweets - the compressed representation of tweets
+ * word_count - the number of distinct words in the batch
+ * gpu_matrix - the  bit containment matrix 
+ */
 __global__ void get_trend_word_counts(int * trend_maps,
                                        int * gpu_tweets,
                                        int word_count,
@@ -172,19 +181,36 @@ int main(int argc, char** argv) {
       // Allocate trend maps
       if(cudaMalloc(&trend_maps, sizeof(int) * word_count * NUMTRENDS)
          != cudaSuccess) {
-        fprintf(stderr, "Failed to allocate the matrix on GPU\n");
+        fprintf(stderr, "Failed to allocate trend_maps on GPU\n");
         exit(2);
       }
- 
+
+      // Zero out trend_maps
+      if(cudaMemset(&trend_maps, 0, sizeof(int) * word_count * NUMTRENDS)
+         != cudaSuccess) {
+        fprintf(stderr, "Failed to zero out trend_maps on GPU\n");
+        exit(2);
+      }
+
+      // Figure out trends' compressed values (indices in the word array)
+
+      // Make tweets x words matrix of counts. (similar to the thing below)      
       // TODO: Make an NxK topic containment bit matrix
       compute_topic_containment<<<(N*N + THREADS_PER_BLOCK -1)/THREADS_PER_BLOCK,
         THREADS_PER_BLOCK>>>(gpu_tweets, gpu_trends, gpu_matrix);
 
+      // To make trend_maps, add rows of the tweet X word matrix that correpond
+      // to each trend
       // TODO: Get word counts for each tweet with a specific trend
       get_trend_word_counts<<<1, NUMTRENDS>>>(trend_maps, gpu_tweets, word_count,
                                               gpu_matrix);
+      
       // TODO: Find word sets correlated with each topic and compute correlation
       //   coefficients
+      get_correlated_words<<<1, NUMTRENDS>>>(trend_maps, total_word_counts,
+                                             correlated_words);
+
+      
       // TODO: Create word clouds with external tools (go to 8 if it doesn’t
       //   work out)
       // TODO: If time allows: Implement weighing words by importance (tf-idf)
@@ -195,6 +221,7 @@ int main(int argc, char** argv) {
 
       // Free stuff: trend_maps
       // Zero out gpu_matrix
+      
       
       word_count = 0;
       tweet_count = 0;

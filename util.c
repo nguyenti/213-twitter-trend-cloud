@@ -98,7 +98,7 @@ void compress_str (char* string, int* compressed, char words[][TWEETSIZE],
          index < COMPRESSEDLEN){
     string = NULL;
     if (strlen(word[index]) >= 3) { // if the word is appropriate size
-      compressed[index] = hash_func(word[index]);
+      
       // Check if the word is already in our map
       int i;
       for (i = 0; i < *word_count; i++) {
@@ -115,6 +115,8 @@ void compress_str (char* string, int* compressed, char words[][TWEETSIZE],
         total_word_counts[*word_count]++;
         (*word_count)++;
       }
+      // Use the index of the word for compressed representation
+      compressed[index] = i; //hash_func(word[index]);
     }
     index++;
   }
