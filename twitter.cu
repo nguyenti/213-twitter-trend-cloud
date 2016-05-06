@@ -475,26 +475,38 @@ __global__ void get_trend_word_counts(int * trend_maps,
                                       int word_count,
                                       char * gpu_matrix) {
   int trend_index =  threadIdx.x + blockIdx.x * THREADS_PER_BLOCK;
-   if (trend_index < NUMTRENDS) {
-     int trend_map_index = trend_index * word_count;
-     int trend_word_index = gpu_trends[trend_index];
-     for (int i = 0; i < NUMTWEETS; i++) { // for every tweet
-       if (gpu_matrix[i * word_count + trend_word_index] > 0) {
-         // if the trend is present in the tweet
-         for (int j = 0; j < word_count; j++) {
-           // get the word counts for all the words in the tweet
-           trend_maps[trend_map_index + j] +=
-             gpu_matrix[i * word_count + j];
-         }
-         gpu_tweets_in_trend[trend_index]++;
-       }
-     }
-   }
+  if (trend_index < NUMTRENDS) {
+    int trend_map_index = trend_index * word_count;
+    int trend_word_index = gpu_trends[trend_index];
+    for (int i = 0; i < NUMTWEETS; i++) { // for every tweet
+      if (gpu_matrix[i * word_count + trend_word_index] > 0) {
+        // if the trend is present in the tweet
+        for (int j = 0; j < word_count; j++) {
+          // get the word counts for all the words in the tweet
+          trend_maps[trend_map_index + j] +=
+            gpu_matrix[i * word_count + j];
+        }
+        gpu_tweets_in_trend[trend_index]++;
+      }
+    }
+  }
 }
 
 __global__ void get_correlated_words(int * trend_maps,
                                      int * gpu_tweets_in_trends,
                                      int * total_word_counts,
-                                     char * correlated_words) {
-
+                                     char * correlated_words,
+                                     int word_count) {
+  int trend_index =  threadIdx.x + blockIdx.x * THREADS_PER_BLOCK;
+  if (trend_index < NUMTRENDS) {
+    for (int i = 0; i < word_count; i++) {
+      if (trend_maps[word_count * trend_index + i] /
+          (double) gpu_tweets_in_trends[trend_index] >
+          CONSTANT * total_word_counts[i] / (double) word_count) {
+        correlated_words[word_count * trend_index + i] = 1;
+      } else {
+        correlated_words[word_count * trend_index + i] = 0;
+      }
+    }
+  }
 }
