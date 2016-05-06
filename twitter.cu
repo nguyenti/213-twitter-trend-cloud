@@ -146,10 +146,7 @@ int main(int argc, char** argv) {
           exit(1);
         }
         // TESTING
-        for (int i = 0; i < num_trends; i++) {
-          compressed_trends[i] = hash_func(trends[i]);
-          printf("TREND %d: %s\n", i, trends[i]);
-        }
+        
         // Copy trends onto the GPU
         if(cudaMemcpy(gpu_trends, compressed_trends, sizeof(int) * NUMTRENDS,
                       cudaMemcpyHostToDevice) != cudaSuccess) {
@@ -193,11 +190,21 @@ int main(int argc, char** argv) {
       }
 
       // Figure out trends' compressed values (indices in the word array)
+      for (int i = 0; i < num_trends; i++) {
+        // go through words array to find each trend'd index
+        for (int j = 0; j < num_words; j++) {
+          if (strcmp(trends[i], words[j]) == 0) {
+            compressed_trends[i] = j;
+            break;
+          }
+        }
+      }
 
-      // Make tweets x words matrix of counts. (similar to the thing below)      
+      // TODO copy trends onto the GPU
+      
+      // Make tweets x words matrix of counts. (similar to the thing below)  
       // TODO: Make an NxK topic containment bit matrix
-      compute_topic_containment<<<(N*N + THREADS_PER_BLOCK -1)/THREADS_PER_BLOCK,
-        THREADS_PER_BLOCK>>>(gpu_tweets, gpu_trends, gpu_matrix);
+      compute_word_containment<<<1, NUMTWEETS>>>(gpu_tweets, gpu_trends, gpu_matrix);
 
       // To make trend_maps, add rows of the tweet X word matrix that correpond
       // to each trend
