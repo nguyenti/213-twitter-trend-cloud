@@ -88,7 +88,7 @@ void CudaMemcpy(void * destination, void * source, size_t size,
 
 // Error-checking wrapper for cudaMemset to 0
 void CudaZeroOut(void * ptr, size_t size, char * error_message) {
-  if(cudaMemset(&ptr, 0, size) != cudaSuccess) {
+  if(cudaMemset(ptr, 0, size) != cudaSuccess) {
     fprintf(stderr, "Failed to zero out %s on GPU\n", error_message);
     exit(2);
   }
@@ -240,7 +240,7 @@ int main(int argc, char** argv) {
       for (int i = 0; i < tweet_count; i++) 
         printf("tweet #%d: %s\n", i, tweets[i]);
       for (int i = 0; i < word_count; i++) 
-        printf("word #%d: %s\n", i, words[i]);
+        printf("word #%d: %s, count %d\n", i, words[i], total_word_counts[i]);
 
       
       // Copy compressed tweets onto the GPU
@@ -256,6 +256,7 @@ int main(int argc, char** argv) {
             compressed_trends[i] = j;
             break;
           }
+          else compressed_trends[i] = END_OF_TWEET; 
         }
       }
 
@@ -282,7 +283,7 @@ int main(int argc, char** argv) {
       // Allocate and copy total_word_counts onto GPU
       int * gpu_total_word_counts = (int*)CudaMalloc(sizeof(int) * word_count,
                                                      "total word counts");
-      CudaMemcpy(gpu_total_word_counts, total_word_counts,sizeof(int) *
+      CudaMemcpy(gpu_total_word_counts, total_word_counts, sizeof(int) *
                  word_count, cudaMemcpyHostToDevice, "total wcs to");
 
       // Zero out gpu_tweets_in_trends on GPU 
@@ -314,7 +315,7 @@ int main(int argc, char** argv) {
       // Find word sets correlated with each topic 
       get_correlated_words<<<1, NUMTRENDS>>>(gpu_word_counts_per_trend,
                                              gpu_tweets_in_trends,
-                                             total_word_counts,
+                                             gpu_total_word_counts,
                                              gpu_correlated_words,
                                              word_count);
 
@@ -526,6 +527,7 @@ __global__ void compute_word_containment(int * gpu_tweets,
                                          char * gpu_word_counts_per_tweet,
                                          int word_count) {
   int index =  threadIdx.x + blockIdx.x * THREADS_PER_BLOCK;
+  
   if (index < NUMTWEETS) {
     for (int i = 0; i < COMPRESSEDLEN
            && gpu_tweets[COMPRESSEDLEN * index + i] != END_OF_TWEET; i++) {
@@ -568,14 +570,33 @@ __global__ void get_correlated_words(int * gpu_word_counts_per_trend,
                                      int * correlated_words,
                                      int word_count) {
   int trend_index =  threadIdx.x + blockIdx.x * THREADS_PER_BLOCK;
+  
   if (trend_index < NUMTRENDS) {
+    //DEBUG
+    printf("Computing correlated words for trend %d\n", trend_index);
     int num_correlated_words = 0;
-    for (int i = 0; i < word_count; i++) {
-      if (gpu_word_counts_per_trend[word_count * trend_index + i] /
-          (double) gpu_tweets_in_trends[trend_index] >
-          CORRELATION_FACTOR * total_word_counts[i] / (double) word_count) {
+    int num_tweets_w_trend = gpu_tweets_in_trends[trend_index];
+    // Ignore trends with no tweets
+    if (num_tweets_w_trend == 0) {
+      printf("No tweets for trend %d\n", trend_index);
+      correlated_words[word_count * trend_index + num_correlated_words] =
+        END_OF_TWEET;
+      return;
+    }
+    
+    for (int word_index = 0; word_index < word_count; word_index++) {
+      double freq_in_trend = gpu_word_counts_per_trend[word_count *
+                                                       trend_index + word_index]
+        / (1.0 * num_tweets_w_trend);
+      double total_freq =  total_word_counts[word_index] / (double) word_count;
+
+      printf("Trend #%d, word %d, local f %.5lf, total f %.5lf\n",
+             trend_index, word_index, freq_in_trend, total_freq);
+      if (freq_in_trend > CORRELATION_FACTOR * total_freq) {
         // got a correlated word! Record it
-        correlated_words[word_count * trend_index + num_correlated_words++] = i;
+        printf("Trend #%d correlated w word %d\n", trend_index, word_index);
+        correlated_words[word_count * trend_index + num_correlated_words++] =
+          word_index;
       }
       // Signify the end of correlated words
       correlated_words[word_count * trend_index + num_correlated_words] =
@@ -583,3 +604,4 @@ __global__ void get_correlated_words(int * gpu_word_counts_per_trend,
     }
   }
 }
+

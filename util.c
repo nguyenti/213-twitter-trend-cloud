@@ -125,7 +125,6 @@ void compress_str (char* string, int* compressed, char words[][TWEETSIZE],
       }
       // Use the index of the word for compressed representation
       compressed[index] = i;
-      printf("Corresponding compressed rep is %d\n", i);
       index++;
     }
   }
