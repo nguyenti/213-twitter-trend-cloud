@@ -89,7 +89,7 @@ void CudaMemcpy(void * destination, void * source, size_t size,
 // Error-checking wrapper for cudaMemset to 0
 void CudaZeroOut(void * ptr, size_t size, char * error_message) {
   if(cudaMemset(&ptr, 0, size) != cudaSuccess) {
-    fprintf(stderr, "Failed to zer out %s on GPU\n", error_message);
+    fprintf(stderr, "Failed to zero out %s on GPU\n", error_message);
     exit(2);
   }
 }
@@ -445,7 +445,10 @@ size_t read_trends(char ** trends, FILE * file) {
       // Got a trend! Copy just the trend text to an allocated buffer
       trends[i] = (char*)malloc(sizeof(char) * (strlen(json_text) + 1));
       strcpy(trends[i], json_text);
-    
+
+      // Only use the first word of the trend
+      trends[i] = strtok(trends[i], " ");
+      
       // Release this reference to the JSON object
       json_decref(text);
       json_decref(json_trend_obj);
