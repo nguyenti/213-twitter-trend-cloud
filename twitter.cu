@@ -1,23 +1,25 @@
-//#include <curand.h>
-//#include <curand_kernel.h>
-
 #include "util.c"
-#include <unordered_map>
-
 
 #define TREND_FETCH_TIME (5 * 60 * 1000) // should be 5 min
 #define THREADS_PER_BLOCK 64
 
-using namespace std;
 
 char* read_tweet(FILE * stream);
 size_t read_trends(char ** trends, FILE * file);
 
+//TODO: RENAME trend_maps, gpu_matrix, gpu_hashed_words
+
+
 /* 
+ * Populate a NUMTWEETS x word_count matrix with word counts per tweet
+ *
+ * @post gpu_matrix[i * word_count + j] == # of occurrences of word j in tweet i
+ *
  * gpu_tweets - the compressed representation of tweets
  * gpu_hashed_words - the compressed representation of words
- * gpu_matrix - the result bit containment matrix 
- * word_count - the number of distinct words in the batch
+ * TODO: these words aren't actually hashed, are they?
+ * gpu_matrix - the resulting matrix of word counts per tweet 
+ * word_count - the number of distinct words in the current batch
  */
 __global__ void compute_word_containment(int * gpu_tweets, 
                                          int * gpu_hashed_words,
@@ -25,11 +27,16 @@ __global__ void compute_word_containment(int * gpu_tweets,
                                          int word_count);
 
 /* 
- * trend_maps - a K trends x word_count array, denoting word counts
- * gpu_tweets_in_trends - array of number of tweets in each trend
+ * Populate a NUMTRENDS x word_count matrix with word counts per trend
+ *
+ * @post trend_maps[i * word_count + j] == number of occurrences of word j in
+ *                                         tweets that contain trend i
+ *
+ * trend_maps - a NUMTRENDS x word_count matrix, denoting word counts per trend
+ * gpu_tweets_in_trends - array of number of tweets containing each trend 
  * gpu_trends - the compressed representation of trends
  * word_count - the number of distinct words in the batch
- * gpu_matrix - the  bit containment matrix 
+ * gpu_matrix - the matrix of word counts per tweet 
  */
 __global__ void get_trend_word_counts(int * trend_maps,
                                       int * gpu_tweets_in_trends,
@@ -38,15 +45,23 @@ __global__ void get_trend_word_counts(int * trend_maps,
                                       char * gpu_matrix);
 
 /*
+ * Populate the matrix of words correlated with each trend
+
+
+TODO: maybe combine with get_trend_word_counts? the resulting matrix is very
+similar, has same dimensions
+
  * trend_maps - word counts for each trend
  * gpu_tweets_in_trends - number of tweets in a trend
  * total_word_counts - word counts for all words in all tweets
  * correlated_words - output, what's correlated
+ * word_count - the number of distinct words in the batch
  */
 __global__ void get_correlated_words(int * trend_maps,
                                      int * gpu_tweets_in_trends,
                                      int * total_word_counts,
-                                     char * correlated_words);
+                                     char * correlated_words,
+                                     int word_count);
 // Main function
 int main(int argc, char** argv) {
   // Timer for trend fetching. Should be every 5 minutes
@@ -245,7 +260,8 @@ int main(int argc, char** argv) {
       get_correlated_words<<<1, NUMTRENDS>>>(trend_maps,
                                              gpu_tweets_in_trends,
                                              total_word_counts,
-                                             correlated_words);
+                                             correlated_words,
+                                             word_count);
 
       
       // TODO: Create word clouds with external tools (go to 8 if it doesn’t
