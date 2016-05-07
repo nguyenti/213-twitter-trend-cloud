@@ -14,8 +14,8 @@
 #include <unistd.h>
 #include <errno.h>
 
-#define NUMTRENDS 50 // Never should be more than 50, per the API
-#define NUMTWEETS 1000
+#define NUMTRENDS 10 // Never should be more than 50, per the API
+#define NUMTWEETS 10 // 1000
 #define COMPRESSEDLEN 36
 #define TWEETSIZE 141
 // a number that cannot possibly represent a compressed word because it exceeds
@@ -80,11 +80,12 @@ void clean_string(char* string) {
   char ch;
   int i = 0;
   while((ch = string[i]) != '\0') {
-    if (ispunct(ch) && ch != '#') {
+    if (!isalpha(ch) && ch != '#' && ch != '@') {
       // replace punctuation with whitespace
       string[i] = ' ';
     }
-    tolower(string[i]); // downcases the characters 
+    // downcase the characters 
+    string[i] = tolower(string[i]); 
     i++;
   }
 }
@@ -105,7 +106,9 @@ void compress_str (char* string, int* compressed, char words[][TWEETSIZE],
   while ((tweet[index] = strtok(string, " \0\n\t")) != NULL &&
          index < COMPRESSEDLEN){
     string = NULL;
-    if (strlen(tweet[index]) >= 3) { // if the word is appropriate size
+    // if the word is appropriate size and not a twitter handle
+    if (strlen(tweet[index]) >= 3 && tweet[index][0] != '@') {
+      
       // Check if the word is already in our map
       int i;
       for (i = 0; i < *word_count; i++) {
