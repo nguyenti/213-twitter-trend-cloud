@@ -18,6 +18,10 @@
 #define NUMTWEETS 1000
 #define COMPRESSEDLEN 36
 #define TWEETSIZE 141
+// a number that cannot possibly represent a compressed word because it exceeds
+// the number of possible words can signify the end of a tweet
+#define END_OF_TWEET (COMPRESSEDLEN * NUMTWEETS + 1)
+#define CORRELATION_FACTOR 2
 
 /**
  * Pipe a stream from a child process
@@ -91,23 +95,21 @@ void clean_string(char* string) {
  * @para: string is already cleaned
  *        compressed is a pointer to an allocated array of 32 int
  *        words is an allocated array of all words encountered so far
- *        hash -- ?? I don't think we need this
  *        total_word_counts -- 1D array of counts for every word in words
  *        word_count -- number of distinct words encountered so far       
  */
 void compress_str (char* string, int* compressed, char words[][TWEETSIZE],
-                   int *hash, int * total_word_counts, int * word_count) {
+                   int * total_word_counts, int * word_count) {
   int index = 0;
-  char* word[TWEETSIZE];
-  while ((word[index] = strtok(string, " \0\n\t")) != NULL &&
+  char* tweet[TWEETSIZE];
+  while ((tweet[index] = strtok(string, " \0\n\t")) != NULL &&
          index < COMPRESSEDLEN){
     string = NULL;
-    if (strlen(word[index]) >= 3) { // if the word is appropriate size
-      
+    if (strlen(tweet[index]) >= 3) { // if the word is appropriate size
       // Check if the word is already in our map
       int i;
       for (i = 0; i < *word_count; i++) {
-        if (compressed[index] == hash[i]) {
+        if (strcmp(tweet[index], words[i]) == 0) {
           // it is! So we increment the count
           total_word_counts[i]++;
           break;
@@ -115,17 +117,17 @@ void compress_str (char* string, int* compressed, char words[][TWEETSIZE],
       }
       // If it wasn't found, add it to our map
       if (i == *word_count) {
-        strncpy(words[*word_count], word[index], TWEETSIZE);
-        hash[*word_count] = compressed[index];
-        total_word_counts[*word_count]++;
+        strncpy(words[*word_count], tweet[index], TWEETSIZE);
+        total_word_counts[*word_count] = 1;
         (*word_count)++;
       }
       // Use the index of the word for compressed representation
-      compressed[index] = i; //hash_func(word[index]);
+      compressed[index] = i; 
     }
     index++;
   }
-  compressed[index] = 0;
+  // Indicate the end of the compressed representation
+  compressed[index] = END_OF_TWEET;
 }
 
 
