@@ -85,13 +85,18 @@ void clean_string(char* string) {
   }
 }
 
-/* compress a string into an array of hashed numbers.
+/* Compress a string into an array of ints.
  * Add each word to our word_count counter
- * @para: string is already cleaned and compressed is a pointer to 
- *        an array of 32 int  
+ *
+ * @para: string is already cleaned
+ *        compressed is a pointer to an allocated array of 32 int
+ *        words is an allocated array of all words encountered so far
+ *        hash -- ?? I don't think we need this
+ *        total_word_counts -- 1D array of counts for every word in words
+ *        word_count -- number of distinct words encountered so far       
  */
 void compress_str (char* string, int* compressed, char words[][TWEETSIZE],
-                   int * hash, int * total_word_counts, int * word_count) {
+                   int *hash, int * total_word_counts, int * word_count) {
   int index = 0;
   char* word[TWEETSIZE];
   while ((word[index] = strtok(string, " \0\n\t")) != NULL &&

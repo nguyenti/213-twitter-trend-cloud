@@ -62,6 +62,28 @@ __global__ void get_correlated_words(int * trend_maps,
                                      int * total_word_counts,
                                      char * correlated_words,
                                      int word_count);
+
+
+// Error-checking wrapper for cudaMalloc
+void * CudaMalloc(size_t size, char * error_message) {
+  void ** ptr = NULL;
+  if(cudaMalloc(ptr, sizeof(int) * NUMTWEETS * COMPRESSEDLEN)
+     != cudaSuccess) {
+    fprintf(stderr, "Failed to allocate %s on GPU\n", error_message);
+    exit(2);
+  }
+  return *ptr;
+}
+
+// Error-checking wrapper for cudaMemcpy
+void CudaMemcpy(void * destination, void * source, size_t size,
+                enum cudaMemcpyKind direction, char * error_message) {
+  if(cudaMemcpy(destination, source, size, direction) != cudaSuccess) {
+    fprintf(stderr, "Failed to copy %s to the GPU\n", error_message);
+  }
+}
+
+
 // Main function
 int main(int argc, char** argv) {
   // Timer for trend fetching. Should be every 5 minutes
@@ -75,12 +97,16 @@ int main(int argc, char** argv) {
   // Array of compressed tweets and trends on host and device
   int compressed_tweets[NUMTWEETS][COMPRESSEDLEN];
   int compressed_trends[NUMTRENDS];
+  int * gpu_tweets = (int*)CudaMalloc(sizeof(int) * NUMTWEETS * COMPRESSEDLEN,
+                                      "the tweets");
+  /*
   int * gpu_tweets;
   if(cudaMalloc(&gpu_tweets, sizeof(int) * NUMTWEETS * COMPRESSEDLEN)
      != cudaSuccess) {
     fprintf(stderr, "Failed to allocate the tweets on GPU\n");
     exit(2);
   }
+  */
   int * gpu_trends;
   if(cudaMalloc(&gpu_tweets, sizeof(int) * NUMTRENDS) != cudaSuccess) {
     fprintf(stderr, "Failed to allocate the trends on GPU\n");
@@ -88,7 +114,8 @@ int main(int argc, char** argv) {
   }
   
   // Topic containment matrix
-  char * trend_matrix = (char *)calloc(sizeof(char) * NUMTWEETS * NUMTRENDS);
+  char * trend_matrix = (char *)calloc(sizeof(char), // size of a cell
+                                       sizeof(char) * NUMTWEETS * NUMTRENDS);
   char * gpu_matrix;
   if(cudaMalloc(&gpu_tweets, sizeof(int) * NUMTWEETS * NUMTRENDS)
      != cudaSuccess) {
@@ -100,8 +127,8 @@ int main(int argc, char** argv) {
 
   // Word arrays
   char words[NUMTWEETS*COMPRESSEDLEN][TWEETSIZE];
-  int hashed_words[NUMTWEETS*COMPRESSEDLEN][TWEETSIZE];
-  int total_word_counts[NUMTWEETS*COMPRESSEDLEN][TWEETSIZE];
+  int hashed_words[NUMTWEETS*COMPRESSEDLEN]; // TODO we don't need this?
+  int total_word_counts[NUMTWEETS*COMPRESSEDLEN];
   int word_count = 0;
   
   // The pipe for the tweet stream
@@ -190,8 +217,12 @@ int main(int argc, char** argv) {
 
     // TODO: Clean and compress the tweet
     clean_string(tweet);
-    compress_str(tweet, compressed_tweets[tweet_count],
-                 words, hashed_words, total_word_counts, &word_count);
+    compress_str(tweet,
+                 compressed_tweets[tweet_count],
+                 words,
+                 hashed_words,
+                 total_word_counts,
+                 &word_count);
     free(tweet);
     
     // TESTING
@@ -478,8 +509,11 @@ __global__ void compute_word_containment(int * gpu_tweets,
     int * tweet = gpu_tweets[COMPRESSEDLEN * index];
     for (int i = 0; i < COMPRESSEDLEN && tweet[i] != 0; i++) {
       for (int j = 0; j < word_count; j++) {
-        if (tweet[i] == gpu_hashed_words[j])
+        if (tweet[i] == gpu_hashed_words[j]) // should be just  == j
           gpu_matrix[word_count * index + j]++;
+        /* //Can't we just say this, since tweet[i] *is* the index of the word
+           gpu_matrix[word_count * index + tweet[i]]++;
+         */
       }
     }
   }
