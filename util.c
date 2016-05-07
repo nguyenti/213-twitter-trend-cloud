@@ -108,7 +108,6 @@ void compress_str (char* string, int* compressed, char words[][TWEETSIZE],
     string = NULL;
     // if the word is appropriate size and not a twitter handle
     if (strlen(tweet[index]) >= 3 && tweet[index][0] != '@') {
-      
       // Check if the word is already in our map
       int i;
       for (i = 0; i < *word_count; i++) {
@@ -125,9 +124,10 @@ void compress_str (char* string, int* compressed, char words[][TWEETSIZE],
         (*word_count)++;
       }
       // Use the index of the word for compressed representation
-      compressed[index] = i; 
+      compressed[index] = i;
+      printf("Corresponding compressed rep is %d\n", i);
+      index++;
     }
-    index++;
   }
   // Indicate the end of the compressed representation
   compressed[index] = END_OF_TWEET;
