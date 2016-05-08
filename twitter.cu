@@ -163,6 +163,9 @@ int main(int argc, char** argv) {
   char* tweet_args[] = {"cat", "many_new_tweets.json", NULL};
   char* trend_args[] = {"cat", "new_trends.json", NULL};
 
+  // File for persistence
+  FILE * cloud_output = fopen("clouds.txt", "a+");
+  
   // an error checking variable for forks
   int rc;
   
@@ -223,10 +226,6 @@ int main(int argc, char** argv) {
           printf("Could not fetch trends\n");
           exit(1);
         }
-        //TESTING
-        for (int i = 0; i < num_trends; i++)
-          printf("trend %s, # %d\n", trends[i], i);
-       
       }
       
       printf("Got %d trends\n", num_trends);
@@ -264,10 +263,6 @@ int main(int argc, char** argv) {
         }
       }
 
-      //TESTING
-       for (int i = 0; i < num_trends; i++)
-         printf("Compressed trend %s - %d\n", trends[i], compressed_trends[i]);
-       
       // Copy compressed trends onto the GPU
       CudaMemcpy(gpu_trends, compressed_trends, sizeof(int) * NUMTRENDS,
                  cudaMemcpyHostToDevice, "trends to");
@@ -310,9 +305,6 @@ int main(int argc, char** argv) {
       // Wait for the kernel to finish
       CudaDeviceSynchronize("computing word counts per tweet");
 
-      // TESTING
-      //print2Dchar<<<1,1>>>(gpu_word_counts_per_tweet, word_count, NUMTWEETS);
-      
       // Make gpu_word_counts_per_trend by adding rows of the tweet*word matrix
       // that correpond to each trend
       get_trend_word_counts<<<1, num_trends>>>(gpu_word_counts_per_trend,
@@ -325,9 +317,6 @@ int main(int argc, char** argv) {
       // Wait for the kernel to finish
       CudaDeviceSynchronize("computing word counts per trend");
 
-      // TESTING
-      //print2Dint<<<1,1>>>(gpu_word_counts_per_trend, word_count, num_trends);
-      
       // Find word sets correlated with each topic 
       get_correlated_words<<<1, num_trends>>>(gpu_word_counts_per_trend,
                                               gpu_tweets_in_trends,
@@ -364,7 +353,17 @@ int main(int argc, char** argv) {
         printf("\n");
       }
 
-      // TODO: Write to file?
+      // Write to file
+      for (int i = 0; i < num_trends; i++) {
+        fprintf(cloud_output, "%s\n", trends[i]);
+        for (int j = 0; j < word_count ; j++) {
+          int word_index = correlated_words[word_count * i + j];
+          if (word_index == END_OF_TWEET) break;
+          fprintf(cloud_output, "%s:%d,", words[word_index],
+                 weights[word_count * i + j]);
+        }
+        fprintf(cloud_output, "\n");
+      }
       
       // TODO: Create word clouds with external tools (go to 8 if it doesn’t
       //   work out)
@@ -395,7 +394,7 @@ int main(int argc, char** argv) {
 
       
       // TESTING
-      return 0;
+      //return 0;
     } // for each NUMTWEETS tweets
     
     // Read the next tweet  
@@ -405,7 +404,8 @@ int main(int argc, char** argv) {
   // Close the pipe and the file
   fclose(tweet_stream);
   close(fd_tweets[0]);
-
+  fclose(cloud_output);
+  
   // Free CUDA stuff
   cudaFree(gpu_tweets);
   cudaFree(gpu_trends);
@@ -626,7 +626,6 @@ __global__ void get_correlated_words(int * gpu_word_counts_per_trend,
     int num_tweets_w_trend = gpu_tweets_in_trends[trend_index];
     // Ignore trends with no tweets
     if (num_tweets_w_trend == 0) {
-      printf("No tweets for trend %d\n", trend_index);
       correlated_words[word_count * trend_index + num_correlated_words] =
         END_OF_TWEET;
       return;
