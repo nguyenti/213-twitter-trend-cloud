@@ -3,32 +3,16 @@
 #define TREND_FETCH_TIME (5 * 60 * 1000) // should be 5 min
 #define THREADS_PER_BLOCK 32
 
-
+/*
+ * Read a tweet from the stream 
+ */
 char* read_tweet(FILE * stream);
+
+/*
+ * Read the trends from the stream 
+ */
 size_t read_trends(char ** trends, FILE * file);
 
-//DONE RENAMING trend_maps, gpu_matrix, gpu_hashed_words (gone)
-// COMPRESSEDLEN -> MAX_WORDS_PER_TWEET
-// gpu_matrix -> gpu_word_counts_per_tweet DONE
-// trend_maps -> gpu_word_counts_per_trend DONE
-
-__global__ void print2Dchar(char * arr, int width, int height) {
-  for (int i = 0; i < height; i++) {
-    for (int j = 0; j < width; j++) {
-      printf("%d, ", arr[width * i + j]);
-    }
-    printf("\n");
-  }
-}
-
-__global__ void print2Dint(int * arr, int width, int height) {
-  for (int i = 0; i < height; i++) {
-    for (int j = 0; j < width; j++) {
-      printf("%d, ", arr[width * i + j]);
-    }
-    printf("\n");
-  }
-}
 /* 
  * Populate a NUMTWEETS x word_count matrix with word counts per tweet
  *
@@ -64,11 +48,6 @@ __global__ void get_trend_word_counts(int * gpu_word_counts_per_trend,
 
 /*
  * Populate the matrix of words correlated with each trend
-
-
-TODO: maybe combine with get_trend_word_counts? the resulting matrix is very
-similar, has same dimensions
-
  * gpu_word_counts_per_trend - word counts for each trend
  * gpu_tweets_in_trends - number of tweets in a trend
  * total_word_counts - word counts for all words in all tweets
@@ -86,42 +65,21 @@ __global__ void get_correlated_words(int * gpu_word_counts_per_trend,
 
 
 // Error-checking wrapper for cudaMalloc
-void * CudaMalloc(size_t size, char * error_message) {
-  void * ptr;
-  if(cudaMalloc(&ptr, size) != cudaSuccess) {
-  fprintf(stderr, "Failed to allocate %s on GPU\n", error_message);
-    exit(2);
-  }
-  return ptr;
-}
+void * CudaMalloc(size_t size, char * error_message);
 
-
-// Error-checking wrapper for cudaMemcpy
-// error message should include what's being copied and a direction preposition
-// e.g "tweets to" or "trends from"
+/*
+ * Error-checking wrapper for cudaMemcpy
+ * error message should include what's being copied and a direction preposition
+ * e.g "tweets to" or "trends from" 
+ */
 void CudaMemcpy(void * destination, void * source, size_t size,
-                enum cudaMemcpyKind direction, char * error_message) {
-  if(cudaMemcpy(destination, source, size, direction) != cudaSuccess) {
-    fprintf(stderr, "Failed to copy %s the GPU\n", error_message);
-    exit(2);
-  }
-}
+                enum cudaMemcpyKind direction, char * error_message);
 
 // Error-checking wrapper for cudaMemset to 0
-void CudaZeroOut(void * ptr, size_t size, char * error_message) {
-  if(cudaMemset(ptr, 0, size) != cudaSuccess) {
-    fprintf(stderr, "Failed to zero out %s on GPU\n", error_message);
-    exit(2);
-  }
-}
+void CudaZeroOut(void * ptr, size_t size, char * error_message);
 
 // Error-checking wrapper for cudaDeviceSynchronize()
-void CudaDeviceSynchronize(char * error_message) {
-  if (cudaDeviceSynchronize() != cudaSuccess) {
-    fprintf(stderr, "Failed to sync after %s\n", error_message);
-    exit(2);
-  }
-}
+void CudaDeviceSynchronize(char * error_message);
 
 
 // Main function
@@ -341,17 +299,6 @@ int main(int argc, char** argv) {
       CudaMemcpy(weights, gpu_weights, sizeof(int) *
                  NUMTRENDS * word_count, cudaMemcpyDeviceToHost,
                  "weights from");
-      
-      //TESTING
-      for (int i = 0; i < num_trends; i++) {
-        printf("Words correlated with trend %s:\n", trends[i]);
-        for (int j = 0; j < word_count ; j++) {
-          int word_index = correlated_words[word_count * i + j];
-          if (word_index == END_OF_TWEET) break;
-          printf("%s(%d), ", words[word_index], weights[word_count * i + j]);
-        }
-        printf("\n");
-      }
 
       // Write to file
       for (int i = 0; i < num_trends; i++) {
@@ -364,15 +311,6 @@ int main(int argc, char** argv) {
         }
         fprintf(cloud_output, "\n");
       }
-      
-      // TODO: Create word clouds with external tools (go to 8 if it doesn’t
-      //   work out)
-     
-      // TODO: If time allows: Explore other uses of the same output data: graph
-      //   building, clustering, or term evolution over time
-      // TODO: If time allows: Rewrite compress_str to use insertion sort and binary search
-      //   maybe with an auxiliary data structure
-
       
       // Free dynamically allocated arrays 
       cudaFree(gpu_word_counts_per_trend);
@@ -392,9 +330,6 @@ int main(int argc, char** argv) {
       word_count = 0;
       tweet_count = 0;
 
-      
-      // TESTING
-      //return 0;
     } // for each NUMTWEETS tweets
     
     // Read the next tweet  
@@ -420,11 +355,12 @@ int main(int argc, char** argv) {
 
   
   
-/* Get inputs from the feed */
+/****************************
+ * Get inputs from the feed *
+ ****************************/
 
 // Returns the size of the trends array
-// Make sure to allocate the trends array!
-// char ** trends = (char **)malloc(sizeof(char *) * NUMTRENDS);
+// trends should be allocated
 size_t read_trends(char ** trends, FILE * file) {
 
   // for using getline
@@ -568,6 +504,9 @@ char* read_tweet(FILE * stream) {
   return NULL;
 }
 
+/******************
+ * CUDA functions *
+ ******************/
 
 // N tweets x K trends
 // gpu_word_counts_per_tweet must be zeroed out
@@ -649,4 +588,45 @@ __global__ void get_correlated_words(int * gpu_word_counts_per_trend,
   }
 }
 
+/************************************
+ * Error checking wrappers for CUDA *
+ ************************************/
 
+// Error checking wrapper for mallocing
+void * CudaMalloc(size_t size, char * error_message) {
+  void * ptr;
+  if(cudaMalloc(&ptr, size) != cudaSuccess) {
+  fprintf(stderr, "Failed to allocate %s on GPU\n", error_message);
+    exit(2);
+  }
+  return ptr;
+}
+
+/*
+ * Error-checking wrapper for cudaMemcpy
+ * error message should include what's being copied and a direction preposition
+ * e.g "tweets to" or "trends from" 
+ */
+void CudaMemcpy(void * destination, void * source, size_t size,
+                enum cudaMemcpyKind direction, char * error_message) {
+  if(cudaMemcpy(destination, source, size, direction) != cudaSuccess) {
+    fprintf(stderr, "Failed to copy %s the GPU\n", error_message);
+    exit(2);
+  }
+}
+
+// Error-checking wrapper for cudaMemset to 0
+void CudaZeroOut(void * ptr, size_t size, char * error_message) {
+  if(cudaMemset(ptr, 0, size) != cudaSuccess) {
+    fprintf(stderr, "Failed to zero out %s on GPU\n", error_message);
+    exit(2);
+  }
+}
+
+// Error-checking wrapper for cudaDeviceSynchronize()
+void CudaDeviceSynchronize(char * error_message) {
+  if (cudaDeviceSynchronize() != cudaSuccess) {
+    fprintf(stderr, "Failed to sync after %s\n", error_message);
+    exit(2);
+  }
+}

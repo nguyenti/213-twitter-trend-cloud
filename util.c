@@ -1,8 +1,6 @@
 #ifndef __UTIL_C__
 #define __UTIL_C__
 
-
-
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,24 +53,6 @@ size_t time_ms() {
   
   // Convert timeval values to milliseconds
   return tv.tv_sec*1000 + tv.tv_usec/1000;
-}
-
-//Citation: https://en.wikipedia.org/wiki/Jenkins_hash_function
-uint32_t hash_func (char *key)
-{
-  int len = strlen(key);
-  uint32_t hash, i;
-  for(hash = i = 0; i < len; ++i)
-    {
-      hash += key[i];
-      hash += (hash << 10);
-      hash ^= (hash >> 6);
-    }
-  hash += (hash << 3);
-  hash ^= (hash >> 11);
-  hash += (hash << 15);
-  // avoid returning zeros
-  return hash == 0 ? 1 : hash;
 }
 
 // Takes out the punctuation from tweets
