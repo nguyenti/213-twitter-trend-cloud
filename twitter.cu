@@ -59,7 +59,8 @@ __global__ void get_trend_word_counts(int * gpu_word_counts_per_trend,
                                       int * gpu_tweets_in_trends,
                                       int * gpu_trends,
                                       int word_count,
-                                      char * gpu_word_counts_per_tweet);
+                                      char * gpu_word_counts_per_tweet,
+                                      int num_trends);
 
 /*
  * Populate the matrix of words correlated with each trend
@@ -80,7 +81,8 @@ __global__ void get_correlated_words(int * gpu_word_counts_per_trend,
                                      int * total_word_counts,
                                      int * correlated_words,
                                      int * weights,
-                                     int word_count);
+                                     int word_count,
+                                     int num_trends);
 
 
 // Error-checking wrapper for cudaMalloc
@@ -158,8 +160,8 @@ int main(int argc, char** argv) {
   int fd_trends[2];
   FILE * tweet_stream;
 
-  char* tweet_args[] = {"cat", "tweets.json", NULL};
-  char* trend_args[] = {"cat", "trends.json", NULL};
+  char* tweet_args[] = {"cat", "many_new_tweets.json", NULL};
+  char* trend_args[] = {"cat", "new_trends.json", NULL};
 
   // an error checking variable for forks
   int rc;
@@ -221,7 +223,13 @@ int main(int argc, char** argv) {
           printf("Could not fetch trends\n");
           exit(1);
         }
+        //TESTING
+        for (int i = 0; i < num_trends; i++)
+          printf("trend %s, # %d\n", trends[i], i);
+       
       }
+      
+      printf("Got %d trends\n", num_trends);
     } // optionally fetching new trends
     
     // save tweet by copying
@@ -238,15 +246,7 @@ int main(int argc, char** argv) {
     
     // Make wird clouds for every NUMTWEETS-sized batch of tweets
     if (tweet_count >= NUMTWEETS - 1) {
-   
-      // TESTING
-      for (int i = 0; i < num_trends; i++)
-         printf("trend #%d: %s\n", i, trends[i]);
-      for (int i = 0; i < tweet_count; i++) 
-        printf("tweet #%d: %s\n", i, tweets[i]);
-      for (int i = 0; i < word_count; i++) 
-        printf("word #%d: %s, count %d\n", i, words[i], total_word_counts[i]);
-      
+         
       // Copy compressed tweets onto the GPU
       CudaMemcpy(gpu_tweets, compressed_tweets, sizeof(int) * NUMTWEETS *
                  COMPRESSEDLEN, cudaMemcpyHostToDevice, "tweets to");
@@ -256,7 +256,7 @@ int main(int argc, char** argv) {
         // go through words array to find each trend's index
         // TODO sort and use binary search
         for (int j = 0; j < word_count; j++) {
-          if (strcmp(trends[i], words[j]) == 0) {
+          if (strncmp(trends[i], words[j], TWEETSIZE) == 0) {
             compressed_trends[i] = j;
             break;
           }
@@ -315,25 +315,27 @@ int main(int argc, char** argv) {
       
       // Make gpu_word_counts_per_trend by adding rows of the tweet*word matrix
       // that correpond to each trend
-      get_trend_word_counts<<<1, NUMTRENDS>>>(gpu_word_counts_per_trend,
-                                              gpu_tweets_in_trends,
-                                              gpu_trends,
-                                              word_count,
-                                              gpu_word_counts_per_tweet);
+      get_trend_word_counts<<<1, num_trends>>>(gpu_word_counts_per_trend,
+                                               gpu_tweets_in_trends,
+                                               gpu_trends,
+                                               word_count,
+                                               gpu_word_counts_per_tweet,
+                                               num_trends);
 
       // Wait for the kernel to finish
       CudaDeviceSynchronize("computing word counts per trend");
 
       // TESTING
-      //print2Dint<<<1,1>>>(gpu_word_counts_per_trend, word_count, NUMTRENDS);
+      //print2Dint<<<1,1>>>(gpu_word_counts_per_trend, word_count, num_trends);
       
       // Find word sets correlated with each topic 
-      get_correlated_words<<<1, NUMTRENDS>>>(gpu_word_counts_per_trend,
-                                             gpu_tweets_in_trends,
-                                             gpu_total_word_counts,
-                                             gpu_correlated_words,
-                                             gpu_weights,
-                                             word_count);
+      get_correlated_words<<<1, num_trends>>>(gpu_word_counts_per_trend,
+                                              gpu_tweets_in_trends,
+                                              gpu_total_word_counts,
+                                              gpu_correlated_words,
+                                              gpu_weights,
+                                              word_count,
+                                              num_trends);
 
       
       // Wait for the kernel to finish
@@ -352,7 +354,7 @@ int main(int argc, char** argv) {
                  "weights from");
       
       //TESTING
-      for (int i = 0; i < NUMTRENDS; i++) {
+      for (int i = 0; i < num_trends; i++) {
         printf("Words correlated with trend %s:\n", trends[i]);
         for (int j = 0; j < word_count ; j++) {
           int word_index = correlated_words[word_count * i + j];
@@ -383,12 +385,17 @@ int main(int argc, char** argv) {
       free(correlated_words);
       free(weights);
 
+      // Zero out total_word_counts
+      for (int i = 0; i < word_count; i++)
+        total_word_counts[i] = 0;
+      
       // Zero counters
       word_count = 0;
       tweet_count = 0;
+
       
       // TESTING
-      //return 0;
+      return 0;
     } // for each NUMTWEETS tweets
     
     // Read the next tweet  
@@ -457,6 +464,7 @@ size_t read_trends(char ** trends, FILE * file) {
     }
 
     size_t i;
+    size_t trend_index = 0;
     // Read every trend into a regular C array
     for (i = 0; i < arr_size &&  i < NUMTRENDS; i++) {
       json_t * json_trend_obj = json_array_get(json_trends_array, i);
@@ -474,12 +482,22 @@ size_t read_trends(char ** trends, FILE * file) {
       const char* json_text = json_string_value(text);
   
       // Got a trend! Copy just the trend text to an allocated buffer
-      trends[i] = (char*)malloc(sizeof(char) * (strlen(json_text) + 1));
-      strcpy(trends[i], json_text);
+      trends[trend_index] = (char*)malloc(sizeof(char) *
+                                          (strlen(json_text) + 1));
+      strcpy(trends[trend_index], json_text);
 
-      // Only use the first word of the trend
-      trends[i] = strtok(trends[i], " ");
+      // Clean the trend
+      clean_string(trends[trend_index]);
       
+      // Only use the first word of the trend
+      trends[trend_index] = strtok(trends[trend_index], " ");
+
+      // Ignore trends that have no english characters
+      if (trends[trend_index] == NULL ||
+          strncmp(trends[trend_index], "#", TWEETSIZE) == 0) {
+        continue;
+      }
+      trend_index++;
       // Release this reference to the JSON object
       json_decref(text);
       json_decref(json_trend_obj);
@@ -493,7 +511,7 @@ size_t read_trends(char ** trends, FILE * file) {
     //free(line);
     
     // Return the number of trends read
-    return i;
+    return trend_index;
   }
   
   // Ran out of input. Just return 0
@@ -573,9 +591,10 @@ __global__ void get_trend_word_counts(int * gpu_word_counts_per_trend,
                                       int * gpu_tweets_in_trends,
                                       int * gpu_trends,
                                       int word_count,
-                                      char * gpu_word_counts_per_tweet) {
+                                      char * gpu_word_counts_per_tweet,
+                                      int num_trends) {
   int trend_index =  threadIdx.x + blockIdx.x * THREADS_PER_BLOCK;
-  if (trend_index < NUMTRENDS) {
+  if (trend_index < num_trends) {
     int trend_map_index = trend_index * word_count;
     int trend_word_index = gpu_trends[trend_index];
     for (int i = 0; i < NUMTWEETS; i++) { // for every tweet
@@ -599,9 +618,10 @@ __global__ void get_correlated_words(int * gpu_word_counts_per_trend,
                                      int * total_word_counts,
                                      int * correlated_words,
                                      int * weights,
-                                     int word_count) {
+                                     int word_count,
+                                     int num_trends) {
   int trend_index =  threadIdx.x + blockIdx.x * THREADS_PER_BLOCK;
-  if (trend_index < NUMTRENDS) {
+  if (trend_index < num_trends) {
     int num_correlated_words = 0;
     int num_tweets_w_trend = gpu_tweets_in_trends[trend_index];
     // Ignore trends with no tweets
@@ -612,16 +632,15 @@ __global__ void get_correlated_words(int * gpu_word_counts_per_trend,
       return;
     }
     for (int word_index = 0; word_index < word_count; word_index++) {
-      double freq_in_trend =
-        gpu_word_counts_per_trend[word_count * trend_index + word_index]
-        / (double) num_tweets_w_trend;
+      int count = gpu_word_counts_per_trend[word_count * trend_index +
+                                            word_index];
+      double freq_in_trend = count / (double) num_tweets_w_trend;
       double total_freq =  total_word_counts[word_index] / (double) word_count;
-      if (freq_in_trend > CORRELATION_FACTOR * total_freq) {
+      if (freq_in_trend > CORRELATION_FACTOR * total_freq && count > 1) {
         // got a correlated word! Record it
         correlated_words[word_count * trend_index + num_correlated_words] =
           word_index; // And its weight:
-        weights[word_count * trend_index + num_correlated_words] =
-          gpu_word_counts_per_trend[word_count * trend_index + word_index];
+        weights[word_count * trend_index + num_correlated_words] = count;
         num_correlated_words++;
       }
       // Signify the end of correlated words array

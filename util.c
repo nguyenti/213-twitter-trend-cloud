@@ -14,14 +14,14 @@
 #include <unistd.h>
 #include <errno.h>
 
-#define NUMTRENDS 10 // Never should be more than 50, per the API
-#define NUMTWEETS 10 // 1000
+#define NUMTRENDS 40 // Never should be more than 50, per the API
+#define NUMTWEETS 1000 // 1000
 #define COMPRESSEDLEN 36
 #define TWEETSIZE 141
 // a number that cannot possibly represent a compressed word because it exceeds
 // the number of possible words can signify the end of a tweet
-#define END_OF_TWEET (COMPRESSEDLEN * NUMTWEETS + 1)
-#define CORRELATION_FACTOR 2
+#define END_OF_TWEET (-1)
+#define CORRELATION_FACTOR 1
 
 /**
  * Pipe a stream from a child process
