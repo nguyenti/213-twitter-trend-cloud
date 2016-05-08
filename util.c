@@ -12,14 +12,12 @@
 #include <unistd.h>
 #include <errno.h>
 
-#define NUMTRENDS 40 // Never should be more than 50, per the API
-#define NUMTWEETS 1000 // 1000
-#define COMPRESSEDLEN 36
-#define TWEETSIZE 141
-// a number that cannot possibly represent a compressed word because it exceeds
-// the number of possible words can signify the end of a tweet
-#define END_OF_TWEET (-1)
-#define CORRELATION_FACTOR 1
+#define NUMTRENDS 50 // maximum number of trends
+#define NUMTWEETS 1000 // number of tweets processed at a time
+#define COMPRESSEDLEN 36 // maximum number of words in a tweet
+#define TWEETSIZE 141 // maximum length of a word
+#define END_OF_TWEET (-1) // special value signifying the end of a word array
+#define CORRELATION_FACTOR 1 // controls the 
 
 /**
  * Pipe a stream from a child process
@@ -55,7 +53,7 @@ size_t time_ms() {
   return tv.tv_sec*1000 + tv.tv_usec/1000;
 }
 
-// Takes out the punctuation from tweets
+// Takes out everything except ascii letters and # and @ from tweets
 void clean_string(char* string) {
   char ch;
   int i = 0;
