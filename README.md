@@ -44,7 +44,7 @@ Example cloud output:
 
 ![alt text][logo]
 
-[logo]: https://github.com/nguyenti/213-twitter-trend-cloud/blob/master/mother.png "Word cloud for "Mother""
+[logo]: https://github.com/nguyenti/213-twitter-trend-cloud/blob/master/sample/mother.png "Word cloud for "Mother""
 
 ## Future Optimizations
 1. Sort and use binary search for words
