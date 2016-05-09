@@ -86,6 +86,10 @@ void CudaDeviceSynchronize(char * error_message);
 
 // Main function
 int main(int argc, char** argv) {
+  if (argc < 3) {
+    printf("Usage: make run <tweet stream authorization header> <trend stream authorization header>\n");
+    exit(1);
+  }
   // Timer for trend fetching. Should be every 5 minutes
   size_t start_time = time_ms() - TREND_FETCH_TIME - 1;
 
@@ -120,11 +124,21 @@ int main(int argc, char** argv) {
   int fd_trends[2];
   FILE * tweet_stream;
 
-  char* tweet_args[] = {"cat", "many_new_tweets.json", NULL};
-  char* trend_args[] = {"cat", "new_trends.json", NULL};
+  //char* tweet_args[] = {"cat", "many_new_tweets.json", NULL};
+  char* trend_args[] = {"cat", "newer_trends.json", NULL};
 
+
+  char * tweet_args[] = {"curl", "--get",
+                       "https://stream.twitter.com/1.1/statuses/sample.json",
+                         "--header", argv[1], "--verbose", NULL}; 
+  /*
+  char * trend_args[] = {"curl", "--get",
+                         "https://api.twitter.com/1.1/trends/place.json",
+                         "--data", "'id=1'", "--header", argv[2], "--verbose",
+                         NULL};
+  */
   // File for persisting cloud data
-  FILE * cloud_output = fopen("clouds.txt", "a+");
+  FILE * cloud_output = fopen("clouds.txt", "w+");
   
   // an error checking variable for forks
   int rc;
@@ -188,19 +202,22 @@ int main(int argc, char** argv) {
         }
       }
       
-      printf("Got %d trends\n", num_trends);
+     
     } // optionally fetching new trends
     
     // save tweet by copying
     strncpy(tweets[tweet_count], tweet, TWEETSIZE);
 
     // Clean and compress the tweet
+    
     clean_string(tweet);
     compress_str(tweet,
                  compressed_tweets[tweet_count],
                  words,
                  total_word_counts,
                  &word_count);
+    // TESTING
+    printf("Tweet%d %s\n", tweet_count, tweet);
     free(tweet);
     
     // Make wird clouds for every NUMTWEETS-sized batch of tweets
@@ -331,9 +348,8 @@ int main(int argc, char** argv) {
       // Zero counters
       word_count = 0;
       tweet_count = 0;
-
     } // for each NUMTWEETS tweets
-    
+   
     // Read the next tweet  
     tweet = read_tweet(tweet_stream);
     tweet_count++;

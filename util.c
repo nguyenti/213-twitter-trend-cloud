@@ -17,7 +17,7 @@
 #define COMPRESSEDLEN 36 // maximum number of words in a tweet
 #define TWEETSIZE 141 // maximum length of a word
 #define END_OF_TWEET (-1) // special value signifying the end of a word array
-#define CORRELATION_FACTOR 1 // controls the 
+#define CORRELATION_FACTOR 2 // controls the 
 
 /**
  * Pipe a stream from a child process
@@ -53,11 +53,19 @@ size_t time_ms() {
   return tv.tv_sec*1000 + tv.tv_usec/1000;
 }
 
+
 // Takes out everything except ascii letters and # and @ from tweets
 void clean_string(char* string) {
   char ch;
   int i = 0;
+  int len = strlen(string);
   while((ch = string[i]) != '\0') {
+    if (i + 4 < len && strncmp(&string[i], "http", 4) == 0) {
+      // found a URL
+      while(!isspace(string[i]) && string[i] != 0)
+        string[i++] = ' ';
+      ch = string[i];
+    }
     if (!isalpha(ch) && ch != '#' && ch != '@') {
       // replace punctuation with whitespace
       string[i] = ' ';
@@ -86,6 +94,8 @@ void compress_str (char* string, int* compressed, char words[][TWEETSIZE],
     string = NULL;
     // if the word is appropriate size and not a twitter handle
     if (strlen(tweet[index]) >= 3 && tweet[index][0] != '@') {
+      // ignore 'the'
+      if (strcmp(tweet[index], "the") == 0) continue;
       // Check if the word is already in our map
       int i;
       for (i = 0; i < *word_count; i++) {
