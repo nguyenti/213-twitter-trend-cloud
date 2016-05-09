@@ -94,7 +94,7 @@ int main(int argc, char** argv) {
   size_t start_time = time_ms() - TREND_FETCH_TIME - 1;
 
   // The trends
-  char ** trends = (char **)malloc(sizeof(char *) * NUMTRENDS);
+  char ** trends = (char **)Malloc(sizeof(char *) * NUMTRENDS, "trends");
   // The tweets
   char tweets[NUMTWEETS][TWEETSIZE];
 
@@ -123,9 +123,6 @@ int main(int argc, char** argv) {
   int fd_tweets[2];
   int fd_trends[2];
   FILE * tweet_stream;
-
-  printf("INPUT1: %s\n", argv[1]);
-  printf("INPUT2: %s\n", argv[2]);
   
   char * tweet_args[] = {"curl", "--get",
                        "https://stream.twitter.com/1.1/statuses/sample.json",
@@ -141,7 +138,7 @@ int main(int argc, char** argv) {
   //char* trend_args[] = {"cat", "new_trends.json", NULL};
   
   // File for persisting cloud data
-  FILE * cloud_output = fopen("clouds.txt", "w+");
+  FILE * cloud_output = fopen("clouds.txt", "a+");
   
   // an error checking variable for forks
   int rc;
@@ -306,13 +303,14 @@ int main(int argc, char** argv) {
       CudaDeviceSynchronize("computing correlated words");
 
       // Allocate and copy correlated words onto CPU
-      correlated_words = (int*)malloc(sizeof(int) * NUMTRENDS * word_count);
+      correlated_words = (int*)Malloc(sizeof(int) * NUMTRENDS * word_count,
+                                      "correlated words");
       CudaMemcpy(correlated_words, gpu_correlated_words, sizeof(int) *
                  NUMTRENDS * word_count, cudaMemcpyDeviceToHost,
                  "correlated words from");
 
       // Allocate and copy weights of the correlated words
-      weights = (int*)malloc(sizeof(int) * NUMTRENDS * word_count);
+      weights = (int*)Malloc(sizeof(int) * NUMTRENDS * word_count, "weights");
       CudaMemcpy(weights, gpu_weights, sizeof(int) *
                  NUMTRENDS * word_count, cudaMemcpyDeviceToHost,
                  "weights from");
@@ -432,8 +430,9 @@ size_t read_trends(char ** trends, FILE * file) {
       const char* json_text = json_string_value(text);
   
       // Got a trend! Copy just the trend text to an allocated buffer
-      trends[trend_index] = (char*)malloc(sizeof(char) *
-                                          (strlen(json_text) + 1));
+      trends[trend_index] = (char*)Malloc(sizeof(char) *
+                                          (strlen(json_text) + 1),
+                                          "a trend");
       strcpy(trends[trend_index], json_text);
 
       // Clean the trend
@@ -503,7 +502,8 @@ char* read_tweet(FILE * stream) {
     const char* json_text = json_string_value(text);
   
     // Got a tweet! Copy just the tweet text to an allocated buffer
-    char* tweet_text = (char*)malloc(sizeof(char) * (line_length + 1));
+    char* tweet_text = (char*)Malloc(sizeof(char) * (line_length + 1),
+                                     "tweet text");
     strcpy(tweet_text, json_text);
     
     // Release this reference to the JSON objects
@@ -610,7 +610,7 @@ __global__ void get_correlated_words(int * gpu_word_counts_per_trend,
 void * CudaMalloc(size_t size, char * error_message) {
   void * ptr;
   if(cudaMalloc(&ptr, size) != cudaSuccess) {
-  fprintf(stderr, "Failed to allocate %s on GPU\n", error_message);
+    fprintf(stderr, "Failed to allocate %s on GPU\n", error_message);
     exit(2);
   }
   return ptr;

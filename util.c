@@ -120,6 +120,14 @@ void compress_str (char* string, int* compressed, char words[][TWEETSIZE],
   compressed[index] = END_OF_TWEET;
 }
 
-
+// error checking wrapper for malloc
+void * Malloc(size_t size, char * error_message) {
+  void * ptr = malloc(size);
+  if (ptr == NULL) {
+    fprintf(stderr, "Failed to allocate %s the heap\n", error_message);
+    exit(2);
+  }
+  return ptr;
+}
 
 #endif
