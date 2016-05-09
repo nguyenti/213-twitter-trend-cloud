@@ -28,8 +28,11 @@ if __name__ == '__main__':
     plt.ion()
     #plt.figure()       
     for trend in trend_clouds.iterkeys():
+    	if len(trend_clouds[trend]) < 1:
+    		continue
         wc = WordCloud().generate_from_frequencies(trend_clouds[trend].items())
-        plt.figure()
+        fig = plt.figure()
+        fig.canvas.set_window_title(trend)
         plt.imshow(wc)
         plt.axis("off")
         plt.pause(2.0) # delay for 2 seconds 
