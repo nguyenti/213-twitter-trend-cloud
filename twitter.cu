@@ -138,7 +138,7 @@ int main(int argc, char** argv) {
   
   // Backup commands, if Twitter keeps denying authorization to curl
   //char* tweet_args[] = {"cat", "many_new_tweets.json", NULL};
-  //char* trend_args[] = {"cat", "newer_trends.json", NULL};
+  //char* trend_args[] = {"cat", "new_trends.json", NULL};
   
   // File for persisting cloud data
   FILE * cloud_output = fopen("clouds.txt", "w+");
