@@ -12,6 +12,10 @@ make && make run TWEET_OAUTH="'<INSERT YOUR TWITTER AUTHORIZATION HERE>'" TREND_
 ```
 
 However, we ran into occasional authentication issues with Twitter, so if that fails, we have some backup files for you to use, commented out in twitter.cu on lines 140 and 141. You will also need to comment out lines 130-138. That way, instead of getting live Twitter data, you can get some nice tweets sampled on May 8th, 2016 around noon, or Mother's day.
+In that case, just run
+```
+make && make run
+```
 
 ### To produce the word cloud
 We used an external library in order to produce the word cloud. You can follow the instructions [here](https://github.com/amueller/word_cloud) to get the setup or just run:
