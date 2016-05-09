@@ -14,7 +14,7 @@ char* read_tweet(FILE * stream);
 /*
  * Read the trends from the stream 
  */
-size_t read_trends(char ** trends, FILE * file);
+size_t read_trends(char trends[][TWEETSIZE], FILE * file);
 
 /* 
  * Populate a NUMTWEETS x word_count matrix with word counts per tweet
@@ -94,7 +94,8 @@ int main(int argc, char** argv) {
   size_t start_time = time_ms() - TREND_FETCH_TIME - 1;
 
   // The trends
-  char ** trends = (char **)Malloc(sizeof(char *) * NUMTRENDS, "trends");
+  //char ** trends = (char **)Malloc(sizeof(char *) * NUMTRENDS, "trends");
+  char trends[NUMTRENDS][TWEETSIZE];
   // The tweets
   char tweets[NUMTWEETS][TWEETSIZE];
 
@@ -167,7 +168,6 @@ int main(int argc, char** argv) {
   int rc;
   
   int tweet_count = 0;
-  int first_iteration = 1;
   size_t num_trends;
   
   // Open the tweet stream
@@ -209,12 +209,7 @@ int main(int argc, char** argv) {
         pipe_stream(trend_args, fd_trends);
       } else { // parent
         close(fd_trends[1]);
-        // read trends from stdin
-        if (!first_iteration) {
-          for (int i = 0; i < num_trends; i++) 
-            free(trends[i]);
-        } else { first_iteration = 0; }
-        
+                
         FILE * trend_stream = fdopen (fd_trends[0], "r");
         // read_trends allocates each trend
         num_trends = read_trends(trends, trend_stream);
@@ -382,7 +377,6 @@ int main(int argc, char** argv) {
   cudaFree(gpu_tweets);
   cudaFree(gpu_trends);
   cudaFree(gpu_tweets_in_trends);
-  free(trends);
   
   return 0;
 }
@@ -394,7 +388,7 @@ int main(int argc, char** argv) {
 
 // Returns the size of the trends array
 // trends should be allocated
-size_t read_trends(char ** trends, FILE * file) {
+size_t read_trends(char trends[][TWEETSIZE], FILE * file) {
 
   // for using getline
   static char* line = NULL;
@@ -450,17 +444,15 @@ size_t read_trends(char ** trends, FILE * file) {
       // Get the string out of the JSON text value
       const char* json_text = json_string_value(text);
   
-      // Got a trend! Copy just the trend text to an allocated buffer
-      trends[trend_index] = (char*)Malloc(sizeof(char) *
-                                          (strlen(json_text) + 1),
-                                          "a trend");
+      // Got a trend! Copy just the trend text 
       strcpy(trends[trend_index], json_text);
 
       // Clean the trend
       clean_string(trends[trend_index]);
       
       // Only use the first word of the trend
-      trends[trend_index] = strtok(trends[trend_index], " ");
+      strncpy(trends[trend_index],strtok(trends[trend_index], " "),
+              TWEETSIZE);
 
       // Ignore trends that have no english characters
       if (trends[trend_index] == NULL ||

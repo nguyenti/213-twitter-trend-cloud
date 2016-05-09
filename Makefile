@@ -10,5 +10,5 @@ twitter: twitter.cu util.c
 	$(NVCC) $(NVCC_FLAGS) -o twitter twitter.cu util.c
 
 run: twitter
-	LD_LIBRARY_PATH=/home/curtsinger/lib ./twitter $(TWEET_OAUTH) $(TREND_OAUTH)
+	LD_LIBRARY_PATH=/home/curtsinger/lib ./twitter
 
