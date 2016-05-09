@@ -37,7 +37,8 @@ __global__ void compute_word_containment(int * gpu_tweets,
  * gpu_tweets_in_trends - array of number of tweets containing each trend 
  * gpu_trends - the compressed representation of trends
  * word_count - the number of distinct words in the batch
- * gpu_word_counts_per_tweet - the matrix of word counts per tweet 
+ * gpu_word_counts_per_tweet - the matrix of word counts per tweet
+ * num_trends - number of trend being considered 
  */
 __global__ void get_trend_word_counts(int * gpu_word_counts_per_trend,
                                       int * gpu_tweets_in_trends,
@@ -54,6 +55,7 @@ __global__ void get_trend_word_counts(int * gpu_word_counts_per_trend,
  * correlated_words - output, what's correlated
  * weights - frequency of each of the correlated words
  * word_count - the number of distinct words in the batch
+ * num_trends - number of trend being considered 
  */
 __global__ void get_correlated_words(int * gpu_word_counts_per_trend,
                                      int * gpu_tweets_in_trends,
@@ -70,7 +72,7 @@ void * CudaMalloc(size_t size, char * error_message);
 /*
  * Error-checking wrapper for cudaMemcpy
  * error message should include what's being copied and a direction preposition
- * e.g "tweets to" or "trends from" 
+ * e.g. "tweets to" or "trends from" 
  */
 void CudaMemcpy(void * destination, void * source, size_t size,
                 enum cudaMemcpyKind direction, char * error_message);
@@ -121,7 +123,7 @@ int main(int argc, char** argv) {
   char* tweet_args[] = {"cat", "many_new_tweets.json", NULL};
   char* trend_args[] = {"cat", "new_trends.json", NULL};
 
-  // File for persistence
+  // File for persisting cloud data
   FILE * cloud_output = fopen("clouds.txt", "a+");
   
   // an error checking variable for forks
@@ -430,9 +432,9 @@ size_t read_trends(char ** trends, FILE * file) {
 
       // Ignore trends that have no english characters
       if (trends[trend_index] == NULL ||
-          strncmp(trends[trend_index], "#", TWEETSIZE) == 0) {
-        continue;
-      }
+          strncmp(trends[trend_index], "#", TWEETSIZE) == 0)
+          continue;
+      
       trend_index++;
       // Release this reference to the JSON object
       json_decref(text);
@@ -444,7 +446,7 @@ size_t read_trends(char ** trends, FILE * file) {
     json_decref(first_object);
     json_decref(root);
 
-    //free(line);
+    free(line);
     
     // Return the number of trends read
     return trend_index;
@@ -481,6 +483,7 @@ char* read_tweet(FILE * stream) {
     // If there was no text, skip this tweet
     if(!json_is_string(text)) {
       json_decref(root);
+      json_decref(text);
       continue;
     }
   
@@ -491,10 +494,9 @@ char* read_tweet(FILE * stream) {
     char* tweet_text = (char*)malloc(sizeof(char) * (line_length + 1));
     strcpy(tweet_text, json_text);
     
-    // Release this reference to the JSON object
+    // Release this reference to the JSON objects
     json_decref(root);
-
-    //free(line);
+    json_decref(text);
     
     // Return the result
     return tweet_text;
