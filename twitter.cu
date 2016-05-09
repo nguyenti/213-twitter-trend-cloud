@@ -124,19 +124,22 @@ int main(int argc, char** argv) {
   int fd_trends[2];
   FILE * tweet_stream;
 
-  //char* tweet_args[] = {"cat", "many_new_tweets.json", NULL};
-  char* trend_args[] = {"cat", "newer_trends.json", NULL};
-
-
+  printf("INPUT1: %s\n", argv[1]);
+  printf("INPUT2: %s\n", argv[2]);
+  
   char * tweet_args[] = {"curl", "--get",
                        "https://stream.twitter.com/1.1/statuses/sample.json",
                          "--header", argv[1], "--verbose", NULL}; 
-  /*
+  
   char * trend_args[] = {"curl", "--get",
                          "https://api.twitter.com/1.1/trends/place.json",
                          "--data", "'id=1'", "--header", argv[2], "--verbose",
                          NULL};
-  */
+  
+  // Backup commands, if Twitter keeps denying authorization to curl
+  //char* tweet_args[] = {"cat", "many_new_tweets.json", NULL};
+  //char* trend_args[] = {"cat", "newer_trends.json", NULL};
+  
   // File for persisting cloud data
   FILE * cloud_output = fopen("clouds.txt", "w+");
   
@@ -200,26 +203,21 @@ int main(int argc, char** argv) {
           printf("Could not fetch trends\n");
           exit(1);
         }
-      }
-      
-     
+      }  
     } // optionally fetching new trends
     
     // save tweet by copying
     strncpy(tweets[tweet_count], tweet, TWEETSIZE);
 
     // Clean and compress the tweet
-    
     clean_string(tweet);
     compress_str(tweet,
                  compressed_tweets[tweet_count],
                  words,
                  total_word_counts,
                  &word_count);
-    // TESTING
-    printf("Tweet%d %s\n", tweet_count, tweet);
     free(tweet);
-    
+        
     // Make wird clouds for every NUMTWEETS-sized batch of tweets
     if (tweet_count >= NUMTWEETS - 1) {
          
@@ -369,8 +367,6 @@ int main(int argc, char** argv) {
   
   return 0;
 }
-  
-
   
   
 /****************************

@@ -37,4 +37,5 @@
 
 # Specific exec
 twitter
-*.json
+
+#*.json
