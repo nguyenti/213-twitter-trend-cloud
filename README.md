@@ -31,7 +31,7 @@ Save the cloud, if you wish.
 1. Get OAuth for both the [Twitter sample stream](https://dev.twitter.com/streaming/reference/get/statuses/sample) and the [Twitter trends stream](https://dev.twitter.com/rest/reference/get/trends/place)
 2. Run
 	```
-	make && make run make && make run TWEET_OAUTH="'<INSERT YOUR TWITTER AUTHORIZATION HERE>'"
+	make && make run TWEET_OAUTH="'<INSERT YOUR TWITTER AUTHORIZATION HERE>'" TRENDS_OAUTH="'<INSERT YOUR TRENDS AUTHORIZATION HERE>'"
 	```
 3. Install wordcloud (need to do this only one time)
 4. Run
@@ -44,7 +44,7 @@ Example cloud output:
 
 ![alt text][logo]
 
-[logo]: https://github.com/adam-p/markdown-here/raw/master/src/common/images/icon48.png "Word cloud for ______"
+[logo]: https://github.com/nguyenti/213-twitter-trend-cloud/blob/master/sample/mother.png "Word cloud for "Mother""
 
 ## Future Optimizations
 1. Sort and use binary search for words
