@@ -28,19 +28,19 @@ python cloud_maker.py
 Save the cloud, if you wish.
 
 ## Example:
-1. Got OAuth for both the [Twitter sample stream](https://dev.twitter.com/streaming/reference/get/statuses/sample) and the [Twitter trends stream](https://dev.twitter.com/rest/reference/get/trends/place)
-2. Ran
-```
-make && make run make && make run TWEET_OAUTH="'<INSERT YOUR TWITTER AUTHORIZATION HERE>'"
-```
-3. Installed wordcloud (needs this only one time)
+1. Get OAuth for both the [Twitter sample stream](https://dev.twitter.com/streaming/reference/get/statuses/sample) and the [Twitter trends stream](https://dev.twitter.com/rest/reference/get/trends/place)
+2. Run
+	```
+	make && make run make && make run TWEET_OAUTH="'<INSERT YOUR TWITTER AUTHORIZATION HERE>'"
+	```
+3. Install wordcloud (need to do this only one time)
 4. Run
-```
-python cloud_maker.py
-```
+	```
+	python cloud_maker.py
+	```
 5. Save the cloud(s)
 
-Here is an example cloud:
+Example cloud output:
 
 ![alt text][logo]
 
