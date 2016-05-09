@@ -47,5 +47,5 @@ Example cloud output:
 [logo]: https://github.com/adam-p/markdown-here/raw/master/src/common/images/icon48.png "Word cloud for ______"
 
 ## Future Optimizations
-	1. Sort and use binary search for words
-	2. make get_trend_word_counts go across rows (one thread per tweet), not for every trend
+1. Sort and use binary search for words
+2. Make get_trend_word_counts go across rows (one thread per tweet), not for every trend
