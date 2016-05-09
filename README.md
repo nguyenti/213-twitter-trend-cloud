@@ -8,13 +8,17 @@ Once you have set that up and received the OAuth signature, you will need the *A
 
 To run our program, run
 ```
-make && make run TWEET_OAUTH="'<INSERT YOUR TWITTER AUTHORIZATION HERE>'" TREND_OAUTH="'<INSERT YOUR TRENDS AUTHORIZATION HERE>'"
+make
+```
+and then
+```
+LD_LIBRARY_PATH=/home/curtsinger/lib ./twitter '<INSERT YOUR TWITTER AUTHORIZATION HERE>' '<INSERT YOUR TRENDS AUTHORIZATION HERE>'
 ```
 
 However, we ran into occasional authentication issues with Twitter, so if that fails, we have some backup files for you to use, commented out in twitter.cu on lines 140 and 141. You will also need to comment out lines 130-138. That way, instead of getting live Twitter data, you can get some nice tweets sampled on May 8th, 2016 around noon, or Mother's day.
 In that case, just run
 ```
-make && make run TWEET_OAUTH=placeholder TREND_OAUTH=placeholder
+make && make run
 ```
 
 ### To produce the word cloud

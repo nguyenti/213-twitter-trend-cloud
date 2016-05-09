@@ -17,7 +17,7 @@
 #define COMPRESSEDLEN 36 // maximum number of words in a tweet
 #define TWEETSIZE 141 // maximum length of a word
 #define END_OF_TWEET (-1) // special value signifying the end of a word array
-#define CORRELATION_FACTOR 2 // controls the 
+#define CORRELATION_FACTOR 1 // controls the 
 
 /**
  * Pipe a stream from a child process

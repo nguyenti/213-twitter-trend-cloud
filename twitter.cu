@@ -3,6 +3,9 @@
 #define TREND_FETCH_TIME (5 * 60 * 1000) // should be 5 min
 #define THREADS_PER_BLOCK 32
 
+#define NUMCURLARGS 9
+#define NUMCATARGS 3
+
 /*
  * Read a tweet from the stream 
  */
@@ -86,10 +89,7 @@ void CudaDeviceSynchronize(char * error_message);
 
 // Main function
 int main(int argc, char** argv) {
-  if (argc < 3) {
-    printf("Usage: make run <tweet stream authorization header> <trend stream authorization header>\n");
-    exit(1);
-  }
+
   // Timer for trend fetching. Should be every 5 minutes
   size_t start_time = time_ms() - TREND_FETCH_TIME - 1;
 
@@ -123,22 +123,45 @@ int main(int argc, char** argv) {
   int fd_tweets[2];
   int fd_trends[2];
   FILE * tweet_stream;
-  
-  char * tweet_args[] = {"curl", "--get",
-                       "https://stream.twitter.com/1.1/statuses/sample.json",
-                         "--header", argv[1], "--verbose", NULL}; 
-  
-  char * trend_args[] = {"curl", "--get",
-                         "https://api.twitter.com/1.1/trends/place.json",
-                         "--data", "'id=1'", "--header", argv[2], "--verbose",
-                         NULL};
-  
-  // Backup commands, if Twitter keeps denying authorization to curl
-  //char* tweet_args[] = {"cat", "many_new_tweets.json", NULL};
-  //char* trend_args[] = {"cat", "new_trends.json", NULL};
+  char ** tweet_args;
+  char ** trend_args;
+
+  // Hardcoded arguments for the curl and cat commands
+  char * curl_tweet_args[] = {"curl", "--get",
+                         "https://stream.twitter.com/1.1/statuses/sample.json",
+                              "--data", "language=en",
+                              "--header", NULL, "--verbose", NULL};
+  char * curl_trend_args[] =  {"curl", "--get",
+                               "https://api.twitter.com/1.1/trends/place.json",
+                               "--data", "id=1", "--header", NULL, "--verbose",
+                               NULL};
+  char * cat_tweet_args[] = {"cat", "tweets.json", NULL};
+  char* cat_trend_args[] = {"cat", "trends.json", NULL};
+
+  // If we have enough command-line arguments, use curl
+  if (argc == 3) {
+    tweet_args = (char **) malloc(sizeof(char*) * NUMCURLARGS);
+    trend_args = (char **) malloc(sizeof(char*) * NUMCURLARGS);
+    for (int i = 0; i < NUMCURLARGS; i++) {
+      if (i == 6) {
+        tweet_args[i] = argv[1];
+        trend_args[i] = argv[2];
+      } else {
+        tweet_args[i] = curl_tweet_args[i];
+        trend_args[i] = curl_trend_args[i];
+      }
+    }
+  } else { // otherwise, use cat
+    tweet_args = (char **) malloc(sizeof(char*) * NUMCATARGS);
+    trend_args = (char **) malloc(sizeof(char*) * NUMCATARGS);
+    for (int i = 0; i < NUMCURLARGS; i++) {
+      tweet_args[i] = cat_tweet_args[i];
+      trend_args[i] = cat_trend_args[i];
+    }
+  }
   
   // File for persisting cloud data
-  FILE * cloud_output = fopen("clouds.txt", "a+");
+  FILE * cloud_output = fopen("output/clouds.txt", "a+");
   
   // an error checking variable for forks
   int rc;
@@ -359,8 +382,6 @@ int main(int argc, char** argv) {
   cudaFree(gpu_tweets);
   cudaFree(gpu_trends);
   cudaFree(gpu_tweets_in_trends);
-  for (int i = 0; i < NUMTRENDS; i++)
-    free(trends[i]);
   free(trends);
   
   return 0;
