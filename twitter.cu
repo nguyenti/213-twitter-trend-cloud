@@ -1,9 +1,9 @@
 #include "util.c"
 
-#define TREND_FETCH_TIME (5 * 60 * 1000) // should be 5 min
+#define TREND_FETCH_TIME (1 * 15 * 1000) // should be 5 min
 #define THREADS_PER_BLOCK 32
 
-#define NUMCURLARGS 9
+ #define NUMCURLARGS 9
 #define NUMCATARGS 3
 
 /*
@@ -122,7 +122,7 @@ int main(int argc, char** argv) {
   
   // The pipe for the tweet stream
   int fd_tweets[2];
-  int fd_trends[2];
+  
   FILE * tweet_stream;
   char ** tweet_args;
   char ** trend_args;
@@ -136,8 +136,8 @@ int main(int argc, char** argv) {
                                "https://api.twitter.com/1.1/trends/place.json",
                                "--data", "id=1", "--header", NULL, "--verbose",
                                NULL};
-  char * cat_tweet_args[] = {"cat", "tweets.json", NULL};
-  char* cat_trend_args[] = {"cat", "trends.json", NULL};
+  char * cat_tweet_args[] = {"cat", "new_tweets.json", NULL};
+  char* cat_trend_args[] = {"cat", "new_trends.json", NULL};
 
   // If we have enough command-line arguments, use curl
   if (argc == 3) {
@@ -155,10 +155,13 @@ int main(int argc, char** argv) {
   } else { // otherwise, use cat
     tweet_args = (char **) malloc(sizeof(char*) * NUMCATARGS);
     trend_args = (char **) malloc(sizeof(char*) * NUMCATARGS);
-    for (int i = 0; i < NUMCURLARGS; i++) {
+    for (int i = 0; i < NUMCATARGS; i++) {
       tweet_args[i] = cat_tweet_args[i];
       trend_args[i] = cat_trend_args[i];
+      printf("TWEET_ARG[%d]=%s, TREND_ARG[%d]=%s\n",i,tweet_args[i],
+             i,trend_args[i]);
     }
+    
   }
   
   // File for persisting cloud data
@@ -185,6 +188,10 @@ int main(int argc, char** argv) {
     // parent: open the pipe as a file and keep it alive
     close(fd_tweets[1]);
     tweet_stream = fdopen(fd_tweets[0], "r");
+    if (tweet_stream == NULL) {
+      fprintf(stderr, "Failed to open the tweet pipe\n");
+      exit(1);
+    }
   } 
 
   // Get the first tweet
@@ -196,7 +203,9 @@ int main(int argc, char** argv) {
     // Check if it is time to fetch new trends
     if ((time_ms() - start_time) > TREND_FETCH_TIME) {
       start_time = time_ms();
+      num_trends = 0;
       // open a pipe
+      int fd_trends[2];
       if (pipe (fd_trends) < 0){
         perror("pipe error");
         exit(1);
@@ -209,10 +218,10 @@ int main(int argc, char** argv) {
         pipe_stream(trend_args, fd_trends);
       } else { // parent
         close(fd_trends[1]);
-                
+        
         FILE * trend_stream = fdopen (fd_trends[0], "r");
-        // read_trends allocates each trend
         num_trends = read_trends(trends, trend_stream);
+        
         fclose(trend_stream);
         if (num_trends < 1) {
           printf("Could not fetch trends\n");
@@ -220,7 +229,7 @@ int main(int argc, char** argv) {
         }
       }  
     } // optionally fetching new trends
-    
+        
     // save tweet by copying
     strncpy(tweets[tweet_count], tweet, TWEETSIZE);
 
@@ -235,7 +244,7 @@ int main(int argc, char** argv) {
         
     // Make wird clouds for every NUMTWEETS-sized batch of tweets
     if (tweet_count >= NUMTWEETS - 1) {
-         
+      size_t start = time_ms();   
       // Copy compressed tweets onto the GPU
       CudaMemcpy(gpu_tweets, compressed_tweets, sizeof(int) * NUMTWEETS *
                  COMPRESSEDLEN, cudaMemcpyHostToDevice, "tweets to");
@@ -362,6 +371,9 @@ int main(int argc, char** argv) {
       // Zero counters
       word_count = 0;
       tweet_count = 0;
+
+      size_t end = time_ms();
+      printf("\nTiming,%d,%zu\n", NUMTWEETS, end-start);
     } // for each NUMTWEETS tweets
    
     // Read the next tweet  
@@ -388,24 +400,28 @@ int main(int argc, char** argv) {
 
 // Returns the size of the trends array
 // trends should be allocated
-size_t read_trends(char trends[][TWEETSIZE], FILE * file) {
-
+size_t read_trends(char trends[NUMTRENDS][TWEETSIZE], FILE * file) {
   // for using getline
   static char* line = NULL;
   static size_t line_maxlen = 0;
   
   // Loop until we read one valid json array or reach the end of the input
   while(getline(&line, &line_maxlen, file) > 0) {
+    
     // Parse the JSON body
     json_error_t error;
     // The outer array, hypothetically
     json_t* root = json_loads(line, 0, &error);
   
     // Skip over lines with errors
-    if(!root) continue;
+    if(!root){
+      printf("ROOT NULL\n");
+      continue;
+    }
   
     // Skip over lines that aren't JSON nonempty arrays
     if(!json_is_array(root) || json_array_size(root) < 1) {
+      printf("NOT ARRAY\n");
       json_decref(root);
       continue;
     }
@@ -420,6 +436,7 @@ size_t read_trends(char trends[][TWEETSIZE], FILE * file) {
      // Make sure 'trends' is a nonempty array
     if(!json_is_array(json_trends_array) ||
        (arr_size = json_array_size(json_trends_array)) < 1) {
+      printf("THE THING INSIDE IS NOT AN ARRAY\n");
       json_decref(json_trends_array);
       json_decref(first_object);
       json_decref(root);
@@ -429,7 +446,8 @@ size_t read_trends(char trends[][TWEETSIZE], FILE * file) {
     size_t i;
     size_t trend_index = 0;
     // Read every trend into a regular C array
-    for (i = 0; i < arr_size &&  i < NUMTRENDS; i++) {
+    for (i = 0; i < arr_size &&  i < NUMTRENDS
+           && trend_index < NUMTRENDS; i++) {
       json_t * json_trend_obj = json_array_get(json_trends_array, i);
       
       // Get the name of the trend
@@ -437,27 +455,31 @@ size_t read_trends(char trends[][TWEETSIZE], FILE * file) {
   
       // If there was no text, skip this t
       if(!json_is_string(text)) {
+        printf("THE THING INSIDE is not a string\n");
         json_decref(root);
         continue;
       }
   
       // Get the string out of the JSON text value
       const char* json_text = json_string_value(text);
-  
+
+      char * temp = (char *) malloc(sizeof(char) * TWEETSIZE);
       // Got a trend! Copy just the trend text 
-      strcpy(trends[trend_index], json_text);
+      strncpy(temp, json_text, TWEETSIZE);
 
       // Clean the trend
-      clean_string(trends[trend_index]);
+      clean_string(temp);
       
       // Only use the first word of the trend
-      strncpy(trends[trend_index],strtok(trends[trend_index], " "),
-              TWEETSIZE);
-
+      char * first = strtok(temp, " ");
+      
       // Ignore trends that have no english characters
-      if (trends[trend_index] == NULL ||
-          strncmp(trends[trend_index], "#", TWEETSIZE) == 0)
+      if (first == NULL ||
+          strncmp(first, "#", TWEETSIZE) == 0)
           continue;
+      
+      strncpy(trends[trend_index], first, TWEETSIZE);
+      free(temp);
       
       trend_index++;
       // Release this reference to the JSON object
@@ -470,7 +492,7 @@ size_t read_trends(char trends[][TWEETSIZE], FILE * file) {
     json_decref(first_object);
     json_decref(root);
 
-    free(line);
+    //free(line);
     
     // Return the number of trends read
     return trend_index;
@@ -480,24 +502,31 @@ size_t read_trends(char trends[][TWEETSIZE], FILE * file) {
   return 0;
 } // read_trends
 
-
+// From the starter code for the Twitter lab
 char* read_tweet(FILE * stream) {
   static char* line = NULL;
   static size_t line_maxlen = 0;
   ssize_t line_length;
-  
+
+  //printf("GOT CHAR %c\n",  fgetc(stream));
   // Loop until we read one valid tweet or reach the end of the input
   while((line_length = getline(&line, &line_maxlen, stream)) > 0) {
+    
     // Parse the JSON body
     json_error_t error;
     json_t* root = json_loads(line, 0, &error);
-  
     // Skip over lines with errors
-    if(!root) continue;
+    if(!root) {
+      printf("ROOT IS NULL\n");
+      line = NULL;
+      continue;
+    }
   
     // Skip over lines that aren't JSON objects
     if(!json_is_object(root)) {
-      json_decref(root);
+      printf("NOT JSON OBJECT\n");
+      //json_decref(root);
+      printf("FREED ROOT\n");
       continue;
     }
   
@@ -506,8 +535,9 @@ char* read_tweet(FILE * stream) {
   
     // If there was no text, skip this tweet
     if(!json_is_string(text)) {
+      printf("NOT STRING\n");
       json_decref(root);
-      json_decref(text);
+      printf("FREED TEXT\n");
       continue;
     }
   
@@ -515,22 +545,19 @@ char* read_tweet(FILE * stream) {
     const char* json_text = json_string_value(text);
   
     // Got a tweet! Copy just the tweet text to an allocated buffer
-    char* tweet_text = (char*)Malloc(sizeof(char) * (line_length + 1),
-                                     "tweet text");
+    char* tweet_text = (char*)malloc(sizeof(char) * (line_length + 1));
+                                     // "tweet_text");
     strcpy(tweet_text, json_text);
     
-    // Release this reference to the JSON objects
+    // Release this reference to the JSON object
     json_decref(root);
-    json_decref(text);
     
     // Return the result
     return tweet_text;
   }
-  
   // Ran out of input. Just return NULL
   return NULL;
 }
-
 /******************
  * CUDA functions *
  ******************/

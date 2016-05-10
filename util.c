@@ -13,7 +13,7 @@
 #include <errno.h>
 
 #define NUMTRENDS 50 // maximum number of trends
-#define NUMTWEETS 1000 // number of tweets processed at a time
+#define NUMTWEETS 100 // number of tweets processed at a time
 #define COMPRESSEDLEN 36 // maximum number of words in a tweet
 #define TWEETSIZE 141 // maximum length of a word
 #define END_OF_TWEET (-1) // special value signifying the end of a word array
@@ -33,6 +33,13 @@ void pipe_stream(char ** command, int * pipe_fd) {
       exit(1);
     }
     close(pipe_fd[1]); 
+  }
+  //DEBUG
+  int i = 0;
+  fprintf(stderr, "ABOUT TO PRINT COMMAND\n"); 
+  while (command[i] != NULL) {
+    fprintf(stderr, "COMMAND[%d] = %s\n", i, command[i]);
+    i++;
   }
   // now stdout goes to the pipe
   execvp(command[0], command);

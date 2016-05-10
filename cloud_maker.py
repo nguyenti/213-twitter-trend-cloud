@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 from time import sleep
 
-fn = "clouds.txt"
+fn = "output/clouds.txt"
 
 if __name__ == '__main__':
     # map of the form trend : map of word:counts
