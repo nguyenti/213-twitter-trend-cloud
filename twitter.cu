@@ -1,6 +1,6 @@
 #include "util.c"
 
-#define TREND_FETCH_TIME (1 * 15 * 1000) // should be 5 min
+#define TREND_FETCH_TIME (5 * 60 * 1000) // should be 5 min
 #define THREADS_PER_BLOCK 32
 
  #define NUMCURLARGS 9
