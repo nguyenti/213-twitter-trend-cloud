@@ -15,7 +15,7 @@ and then
 LD_LIBRARY_PATH=/home/curtsinger/lib ./twitter '<INSERT YOUR TWITTER AUTHORIZATION HERE>' '<INSERT YOUR TRENDS AUTHORIZATION HERE>'
 ```
 
-However, we ran into occasional authentication issues with Twitter, so if that fails, we have some backup files for you to use, commented out in twitter.cu on lines 140 and 141. You will also need to comment out lines 130-138. That way, instead of getting live Twitter data, you can get some nice tweets sampled on May 8th, 2016 around noon, or Mother's day.
+However, we ran into occasional authentication issues with Twitter, so if that fails, we have some backup files for you to use. That way, instead of getting live Twitter data, you can get some nice tweets sampled on May 8th, 2016 around noon, or Mother's day.
 In that case, just run
 ```
 make && make run
