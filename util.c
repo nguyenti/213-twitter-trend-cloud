@@ -13,7 +13,7 @@
 #include <errno.h>
 
 #define NUMTRENDS 50 // maximum number of trends
-#define NUMTWEETS 100 // number of tweets processed at a time
+#define NUMTWEETS 1000 // number of tweets processed at a time
 #define COMPRESSEDLEN 36 // maximum number of words in a tweet
 #define TWEETSIZE 141 // maximum length of a word
 #define END_OF_TWEET (-1) // special value signifying the end of a word array
@@ -33,13 +33,6 @@ void pipe_stream(char ** command, int * pipe_fd) {
       exit(1);
     }
     close(pipe_fd[1]); 
-  }
-  //DEBUG
-  int i = 0;
-  fprintf(stderr, "ABOUT TO PRINT COMMAND\n"); 
-  while (command[i] != NULL) {
-    fprintf(stderr, "COMMAND[%d] = %s\n", i, command[i]);
-    i++;
   }
   // now stdout goes to the pipe
   execvp(command[0], command);
@@ -66,12 +59,15 @@ void clean_string(char* string) {
   char ch;
   int i = 0;
   int len = strlen(string);
-  while((ch = string[i]) != '\0') {
+  while(i < len && (ch = string[i]) != '\0') {
     if (i + 4 < len && strncmp(&string[i], "http", 4) == 0) {
       // found a URL
-      while(!isspace(string[i]) && string[i] != 0)
+      while(i < len && !isspace(string[i]) && string[i] != 0)
         string[i++] = ' ';
-      ch = string[i];
+      if (i < len)
+        ch = string[i];
+      else
+        break;
     }
     if (!isalpha(ch) && ch != '#' && ch != '@') {
       // replace punctuation with whitespace
