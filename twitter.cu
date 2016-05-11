@@ -94,7 +94,6 @@ int main(int argc, char** argv) {
   size_t start_time = time_ms() - TREND_FETCH_TIME - 1;
 
   // The trends
-  //char ** trends = (char **)Malloc(sizeof(char *) * NUMTRENDS, "trends");
   char trends[NUMTRENDS][TWEETSIZE];
   // The tweets
   char tweets[NUMTWEETS][TWEETSIZE];
@@ -158,10 +157,7 @@ int main(int argc, char** argv) {
     for (int i = 0; i < NUMCATARGS; i++) {
       tweet_args[i] = cat_tweet_args[i];
       trend_args[i] = cat_trend_args[i];
-      printf("TWEET_ARG[%d]=%s, TREND_ARG[%d]=%s\n",i,tweet_args[i],
-             i,trend_args[i]);
     }
-    
   }
   
   // File for persisting cloud data
@@ -199,9 +195,9 @@ int main(int argc, char** argv) {
   
   // Don't stop unless ran out of tweets
   while(tweet != NULL) {
-    
     // Check if it is time to fetch new trends
     if ((time_ms() - start_time) > TREND_FETCH_TIME) {
+      
       start_time = time_ms();
       num_trends = 0;
       // open a pipe
@@ -220,12 +216,15 @@ int main(int argc, char** argv) {
         close(fd_trends[1]);
         
         FILE * trend_stream = fdopen (fd_trends[0], "r");
+        if (tweet_stream == NULL) {
+          fprintf(stderr, "Failed to open the trend pipe\n");
+          exit(1);
+        }
         num_trends = read_trends(trends, trend_stream);
-        
         fclose(trend_stream);
         if (num_trends < 1) {
-          printf("Could not fetch trends\n");
-          exit(1);
+          fprintf(stderr, "Could not fetch trends\n");
+          break;
         }
       }  
     } // optionally fetching new trends
@@ -372,14 +371,18 @@ int main(int argc, char** argv) {
       word_count = 0;
       tweet_count = 0;
 
-      size_t end = time_ms();
-      printf("\nTiming,%d,%zu\n", NUMTWEETS, end-start);
+      // For timing purposes
+      //size_t end = time_ms();
+      //printf("%d,%zu\n", NUMTWEETS, end-start);
     } // for each NUMTWEETS tweets
    
     // Read the next tweet  
     tweet = read_tweet(tweet_stream);
     tweet_count++;
-  }
+  }// while(tweet != NULL)
+
+  // Clean up after running out of trends or tweets
+  
   // Close the pipe and the file
   fclose(tweet_stream);
   close(fd_tweets[0]);
@@ -415,13 +418,13 @@ size_t read_trends(char trends[NUMTRENDS][TWEETSIZE], FILE * file) {
   
     // Skip over lines with errors
     if(!root){
-      printf("ROOT NULL\n");
+      fprintf(stderr, "Invalid json line encountered while reading trends\n");
       continue;
     }
   
     // Skip over lines that aren't JSON nonempty arrays
     if(!json_is_array(root) || json_array_size(root) < 1) {
-      printf("NOT ARRAY\n");
+      fprintf(stderr, "Invalid or empty outer json array encountered while reading trends\n");
       json_decref(root);
       continue;
     }
@@ -433,10 +436,10 @@ size_t read_trends(char trends[NUMTRENDS][TWEETSIZE], FILE * file) {
     json_t * json_trends_array = json_object_get(first_object, "trends");
 
     size_t arr_size;
-     // Make sure 'trends' is a nonempty array
+    // Make sure 'trends' is a nonempty array
     if(!json_is_array(json_trends_array) ||
        (arr_size = json_array_size(json_trends_array)) < 1) {
-      printf("THE THING INSIDE IS NOT AN ARRAY\n");
+      fprintf(stderr, "Invalid or empty inner json array encountered while reading trends\n");
       json_decref(json_trends_array);
       json_decref(first_object);
       json_decref(root);
@@ -453,9 +456,10 @@ size_t read_trends(char trends[NUMTRENDS][TWEETSIZE], FILE * file) {
       // Get the name of the trend
       json_t* text = json_object_get(json_trend_obj, "name");
   
-      // If there was no text, skip this t
+      // If there was no text, skip this 
       if(!json_is_string(text)) {
-        printf("THE THING INSIDE is not a string\n");
+        fprintf(stderr,
+                "Invalid json string encountered while reading trends\n");
         json_decref(root);
         continue;
       }
@@ -473,24 +477,25 @@ size_t read_trends(char trends[NUMTRENDS][TWEETSIZE], FILE * file) {
       // Only use the first word of the trend
       char * first = strtok(temp, " ");
       
-      // Ignore trends that have no english characters
+      // Ignore trends that have no english characters other than a hash
       if (first == NULL ||
           strncmp(first, "#", TWEETSIZE) == 0)
           continue;
       
       strncpy(trends[trend_index], first, TWEETSIZE);
-      free(temp);
+      //free(temp);
       
       trend_index++;
-      // Release this reference to the JSON object
+      // Release references to JSON objects
       json_decref(text);
       json_decref(json_trend_obj);
     }
 
-    // Release references to JSON objects
-    json_decref(json_trends_array);
-    json_decref(first_object);
-    json_decref(root);
+    // Release references to JSON objects <- causes memory corruption
+    // ("corrupted double-linked list")
+    //json_decref(json_trends_array);
+    //json_decref(first_object);
+    //json_decref(root);
 
     //free(line);
     
@@ -508,7 +513,6 @@ char* read_tweet(FILE * stream) {
   static size_t line_maxlen = 0;
   ssize_t line_length;
 
-  //printf("GOT CHAR %c\n",  fgetc(stream));
   // Loop until we read one valid tweet or reach the end of the input
   while((line_length = getline(&line, &line_maxlen, stream)) > 0) {
     
@@ -517,16 +521,14 @@ char* read_tweet(FILE * stream) {
     json_t* root = json_loads(line, 0, &error);
     // Skip over lines with errors
     if(!root) {
-      printf("ROOT IS NULL\n");
-      line = NULL;
+      fprintf(stderr, "Invalid json line encountered while reading tweets\n");
       continue;
     }
   
     // Skip over lines that aren't JSON objects
     if(!json_is_object(root)) {
-      printf("NOT JSON OBJECT\n");
-      //json_decref(root);
-      printf("FREED ROOT\n");
+      fprintf(stderr, "Invalid json object encountered while reading tweets\n");
+      json_decref(root); // TODO failed json_loads doesn't allocate memory
       continue;
     }
   
@@ -535,9 +537,9 @@ char* read_tweet(FILE * stream) {
   
     // If there was no text, skip this tweet
     if(!json_is_string(text)) {
-      printf("NOT STRING\n");
+      fprintf(stderr,
+                "Invalid json string encountered while reading trends\n");
       json_decref(root);
-      printf("FREED TEXT\n");
       continue;
     }
   
@@ -545,16 +547,17 @@ char* read_tweet(FILE * stream) {
     const char* json_text = json_string_value(text);
   
     // Got a tweet! Copy just the tweet text to an allocated buffer
-    char* tweet_text = (char*)malloc(sizeof(char) * (line_length + 1));
-                                     // "tweet_text");
-    strcpy(tweet_text, json_text);
+    char* tweet_text = (char*)Malloc(sizeof(char) * (line_length + 1),
+                                      "tweet_text");
+    strncpy(tweet_text, json_text, TWEETSIZE);
     
     // Release this reference to the JSON object
-    json_decref(root);
+    //json_decref(root);
     
     // Return the result
     return tweet_text;
   }
+  fprintf(stderr, "Could not fetch any more tweets\n");
   // Ran out of input. Just return NULL
   return NULL;
 }
@@ -651,7 +654,7 @@ void * CudaMalloc(size_t size, char * error_message) {
   void * ptr;
   if(cudaMalloc(&ptr, size) != cudaSuccess) {
     fprintf(stderr, "Failed to allocate %s on GPU\n", error_message);
-    exit(2);
+    exit(1);
   }
   return ptr;
 }
@@ -665,7 +668,7 @@ void CudaMemcpy(void * destination, void * source, size_t size,
                 enum cudaMemcpyKind direction, char * error_message) {
   if(cudaMemcpy(destination, source, size, direction) != cudaSuccess) {
     fprintf(stderr, "Failed to copy %s the GPU\n", error_message);
-    exit(2);
+    exit(1);
   }
 }
 
@@ -673,7 +676,7 @@ void CudaMemcpy(void * destination, void * source, size_t size,
 void CudaZeroOut(void * ptr, size_t size, char * error_message) {
   if(cudaMemset(ptr, 0, size) != cudaSuccess) {
     fprintf(stderr, "Failed to zero out %s on GPU\n", error_message);
-    exit(2);
+    exit(1);
   }
 }
 
@@ -681,6 +684,6 @@ void CudaZeroOut(void * ptr, size_t size, char * error_message) {
 void CudaDeviceSynchronize(char * error_message) {
   if (cudaDeviceSynchronize() != cudaSuccess) {
     fprintf(stderr, "Failed to sync after %s\n", error_message);
-    exit(2);
+    exit(1);
   }
 }
